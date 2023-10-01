@@ -11,10 +11,10 @@ def diffImage(filename, refPath):
 
 def printImages(file, filename, refPath):
     if os.path.isfile(filename):
-        file.write("\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=0.3\\textwidth]{" + filename + "}\n\\includegraphics[width=0.3\\textwidth]{" + refPath + filename + "}\n\\includegraphics[width=0.3\\textwidth]{diff_" + filename + "}\n\\end{figure}\n")
+        file.write("\\begin{figure}[H]\n\\centering\n\\includegraphics[width=0.3\\textwidth]{" + filename + "}\n\\includegraphics[width=0.3\\textwidth]{" + refPath + filename + "}\n\\includegraphics[width=0.3\\textwidth]{diff_" + filename + "}\n\\end{figure}\n")
     else:
         file.write("Error: Some of the necessary files do not exist.")
-        file.write("\\begin{figure}[h!]\n\\centering\n\\includegraphics[width=0.3\\textwidth]{owl.png}\n\\includegraphics[width=0.3\\textwidth]{" + refPath + filename + "}\n\\includegraphics[width=0.3\\textwidth]{diff_" + filename + "}\n\\end{figure}\n")
+        file.write("\\begin{figure}[H]\n\\centering\n\\includegraphics[width=0.3\\textwidth]{owl.png}\n\\includegraphics[width=0.3\\textwidth]{" + refPath + filename + "}\n\\includegraphics[width=0.3\\textwidth]{diff_" + filename + "}\n\\end{figure}\n")
 
 if __name__ == "__main__":
     tasks_dict = {
@@ -58,6 +58,7 @@ if __name__ == "__main__":
         file.write("\\documentclass{article}\n")
         file.write("\\usepackage{graphicx}\n")
         file.write("\\usepackage{subcaption}\n")
+        file.write("\\usepackage{float}\n")
         file.write("\\usepackage[a4paper, margin=1in]{geometry}")
         file.write("\\title{" + task_names[task_idx] + " Report}\n")
         file.write("\\begin{document}\n")
