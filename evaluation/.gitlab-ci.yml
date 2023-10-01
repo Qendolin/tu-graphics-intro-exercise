@@ -1,0 +1,59 @@
+image: localhost:5001/cg_image
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - build
+
+stages:
+  - render
+  - latex
+  
+testing:
+  stage: render
+  tags:
+    - cg_render
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^submission\d.*/
+  script:
+    - cp -r /data/framework/* .
+    - make release
+    - cd _project/
+    - cp /data/take_screenshots.sh .
+    - ./take_screenshots.sh $CI_COMMIT_TAG
+    - convert *.ppm -set filename:basename "%[basename]" "%[filename:basename].png"
+    - cp *.png ../evaluation/
+    - cd ../evaluation
+    - cp -r /data/images/$CI_COMMIT_TAG/* .
+    - python3 generate_report.py $CI_COMMIT_TAG
+  allow_failure: false
+  artifacts:
+    paths: 
+      - evaluation/*.png
+      - evaluation/*.tex
+      - evaluation/GCG_GL/*.png
+      - evaluation/GCG_VK/*.png
+    expire_in: 1 d
+
+report:
+  variables:
+    GIT_SUBMODULE_STRATEGY: none
+  stage: latex
+  image: localhost:5001/tex_image
+  script:
+    - cd evaluation
+    - pdflatex report.tex
+    - cd ..
+    - cp ./evaluation/report.pdf .
+  tags:
+    - latex-minimal
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^submission\d.*/
+  allow_failure: false
+  artifacts:
+    paths: 
+      - report.pdf
+    expire_in: 1 d
