@@ -1,7 +1,7 @@
 @ECHO OFF
 setlocal
 
-vcvars64
+@rem vcvars64
 
 set PROJECT_DIR=_project
 set INSTALL_DIR=_bin

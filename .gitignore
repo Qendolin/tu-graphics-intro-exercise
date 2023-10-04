@@ -37,6 +37,7 @@
 **/cmake-build-release/
 **/test/
 **/_project/
+**/_bin/
 
 # Prebuild files and assets
 assets/textures/
