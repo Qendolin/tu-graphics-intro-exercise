@@ -355,12 +355,12 @@ VkDescriptorSet createVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDesc
     return vkDescriptorSet;
 }
 
-void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkBuffer buffer, size_t size)
+void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkBuffer buffer, size_t size, uint32_t start = 0, uint32_t count = -1)
 {
     VkDescriptorBufferInfo bufferInfo = {
         .buffer = buffer,
-        .offset = 0,
-        .range = size,
+        .offset = start * size,
+        .range = count == -1 ? VK_WHOLE_SIZE : count * size,
     };
     VkWriteDescriptorSet vkWriteDescriptorSet = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -442,7 +442,7 @@ struct Vertex
 struct CombinedUniformBlock
 {
     glm::vec4 color;
-    glm::mat4 viewProjectionMatrix;
+    glm::mat4 modelViewProjectionMatrix;
 };
 
 /* --------------------------------------------- */
@@ -543,12 +543,24 @@ int main(int argc, char **argv)
         }},
     };
     VkPipeline vk_pipeline = vklCreateGraphicsPipeline(graphics_pipeline_config);
-    VkBuffer uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CombinedUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    CombinedUniformBlock fragment_uniform_data = {
-        .color = {1.0, 0.5, 0.0, 1.0},
-        .viewProjectionMatrix = camera->viewProjectionMatrix,
+    glm::mat4 model_matrix_1 = glm::mat4(1.0);
+    model_matrix_1 = glm::translate(model_matrix_1, {-1.5, 1, 0});
+    model_matrix_1 = glm::rotate(model_matrix_1, glm::radians(180.0f), {0, 1, 0});
+    glm::mat4 model_matrix_2 = glm::mat4(1.0);
+    model_matrix_2 = glm::translate(model_matrix_2, {1.5, -1, 0});
+    model_matrix_2 = glm::scale(model_matrix_2, {1, 2, 1});
+    CombinedUniformBlock uniform_data_1 = {
+        .color = {0.2, 0.6, 0.4, 1.0},
+        .modelViewProjectionMatrix = camera->viewProjectionMatrix * model_matrix_1,
     };
-    vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &fragment_uniform_data, sizeof(CombinedUniformBlock));
+    CombinedUniformBlock uniform_data_2 = {
+        .color = {0.7, 0.1, 0.2, 1.0},
+        .modelViewProjectionMatrix = camera->viewProjectionMatrix * model_matrix_2,
+    };
+    VkBuffer uniform_buffer_1 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CombinedUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    VkBuffer uniform_buffer_2 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CombinedUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_1, &uniform_data_1, sizeof(CombinedUniformBlock));
+    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_2, &uniform_data_2, sizeof(CombinedUniformBlock));
 
     VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 8, 16);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
@@ -558,8 +570,10 @@ int main(int argc, char **argv)
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         }});
 
-    VkDescriptorSet vk_descriptor_set = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
-    writeDescriptorSetBuffer(vk_device, vk_descriptor_set, 0, uniform_buffer, sizeof(CombinedUniformBlock));
+    VkDescriptorSet vk_descriptor_set_1 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
+    VkDescriptorSet vk_descriptor_set_2 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
+    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_1, 0, uniform_buffer_1, sizeof(CombinedUniformBlock));
+    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 0, uniform_buffer_2, sizeof(CombinedUniformBlock));
 
     glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods)
                        {
@@ -574,7 +588,8 @@ int main(int argc, char **argv)
 
         vklWaitForNextSwapchainImage();
         vklStartRecordingCommands();
-        gcgDrawTeapot(vk_pipeline, vk_descriptor_set);
+        gcgDrawTeapot(vk_pipeline, vk_descriptor_set_1);
+        gcgDrawTeapot(vk_pipeline, vk_descriptor_set_2);
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
 
@@ -600,7 +615,8 @@ int main(int argc, char **argv)
 
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_1);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_2);
     vklDestroyGraphicsPipeline(vk_pipeline);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
