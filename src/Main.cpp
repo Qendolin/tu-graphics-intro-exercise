@@ -292,6 +292,16 @@ VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vec
 
 #pragma endregion
 
+struct Vertex
+{
+    glm::vec3 position;
+};
+
+struct FragmentUniformBlock
+{
+    glm::vec4 color;
+};
+
 /* --------------------------------------------- */
 // Main
 /* --------------------------------------------- */
@@ -357,11 +367,97 @@ int main(int argc, char **argv)
         VKL_EXIT_WITH_ERROR("Failed to init framework");
     }
 
+    VklGraphicsPipelineConfig graphics_pipeline_config = {
+        .vertexShaderPath = "assets/shaders_vk/task2.vert",
+        .fragmentShaderPath = "assets/shaders_vk/task2.frag",
+        .vertexInputBuffers = {{
+            .binding = 0,
+            .stride = sizeof(Vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        }},
+        .inputAttributeDescriptions = {{
+            .location = 0,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
+            .offset = 0u,
+        }},
+        .polygonDrawMode = VK_POLYGON_MODE_FILL,
+        .triangleCullingMode = VK_CULL_MODE_NONE,
+        .descriptorLayout = {{
+            .binding = 0,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        }},
+    };
+    VkPipeline vk_pipeline = vklCreateGraphicsPipeline(graphics_pipeline_config);
+    VkBuffer fragment_uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(FragmentUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    FragmentUniformBlock fragment_uniform_data = {
+        .color = {1.0, 0.5, 0.0, 1.0},
+    };
+    vklCopyDataIntoHostCoherentBuffer(fragment_uniform_buffer, &fragment_uniform_data, sizeof(FragmentUniformBlock));
+
+    VkDescriptorPoolSize descriptor_pool_size = {
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 8,
+    };
+    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = 8,
+        .poolSizeCount = 1,
+        .pPoolSizes = &descriptor_pool_size,
+    };
+    VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
+    VkResult error = vkCreateDescriptorPool(vk_device, &descriptor_pool_create_info, nullptr, &vk_descriptor_pool);
+    VKL_CHECK_VULKAN_ERROR(error);
+
+    VkDescriptorSetLayoutBinding descriptor_set_layout_binding = {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    };
+    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &descriptor_set_layout_binding,
+    };
+    VkDescriptorSetLayout vk_descriptor_set_layout = VK_NULL_HANDLE;
+    error = vkCreateDescriptorSetLayout(vk_device, &descriptor_set_layout_create_info, nullptr, &vk_descriptor_set_layout);
+    VKL_CHECK_VULKAN_ERROR(error);
+
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = vk_descriptor_pool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &vk_descriptor_set_layout,
+    };
+    VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
+    error = vkAllocateDescriptorSets(vk_device, &descriptor_set_allocate_info, &vk_descriptor_set);
+    VKL_CHECK_VULKAN_ERROR(error);
+
+    VkDescriptorBufferInfo fragment_uniform_buffer_info = {
+        .buffer = fragment_uniform_buffer,
+        .offset = 0,
+        .range = sizeof(FragmentUniformBlock),
+    };
+    VkWriteDescriptorSet vk_write_descriptor_set = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = vk_descriptor_set,
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo = &fragment_uniform_buffer_info,
+    };
+    vkUpdateDescriptorSets(vk_device, 1, &vk_write_descriptor_set, 0, nullptr);
+
     glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods)
                        {
         if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         } });
+    vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -369,7 +465,7 @@ int main(int argc, char **argv)
 
         vklWaitForNextSwapchainImage();
         vklStartRecordingCommands();
-        gcgDrawTeapot();
+        gcgDrawTeapot(vk_pipeline, vk_descriptor_set);
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
 
@@ -393,6 +489,10 @@ int main(int argc, char **argv)
     // Wait for all GPU work to finish before cleaning up:
     vkDeviceWaitIdle(vk_device);
 
+    vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
+    vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(fragment_uniform_buffer);
+    vklDestroyGraphicsPipeline(vk_pipeline);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
     vkDestroyDevice(vk_device, nullptr);
@@ -408,6 +508,7 @@ int main(int argc, char **argv)
 // Helper Function Definitions
 /* --------------------------------------------- */
 
+#pragma region helper_functions
 uint32_t selectPhysicalDeviceIndex(const VkPhysicalDevice *physical_devices, uint32_t physical_device_count, VkSurfaceKHR surface)
 {
     // Iterate over all the physical devices and select one that satisfies all our requirements.
@@ -521,3 +622,4 @@ VkSurfaceTransformFlagBitsKHR getSurfaceTransform(VkPhysicalDevice physical_devi
 {
     return getPhysicalDeviceSurfaceCapabilities(physical_device, surface).currentTransform;
 }
+#pragma endregion
