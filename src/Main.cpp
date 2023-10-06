@@ -79,23 +79,10 @@ void errorCallbackFromGlfw(int error, const char *description) { std::cout << "G
 
 #pragma endregion
 
-/* --------------------------------------------- */
-// Main
-/* --------------------------------------------- */
-
-int main(int argc, char **argv)
+#pragma region hide_this_stuff
+GLFWwindow *createGLFWWindow()
 {
-    VKL_LOG(":::::: WELCOME TO GCG 2023 ::::::");
-
-    CMDLineArgs cmdline_args;
-    gcgParseArgs(cmdline_args, argc, argv);
-
-    /* --------------------------------------------- */
-    // Subtask 1.1: Load Settings From File
-    /* --------------------------------------------- */
-
     INIReader window_reader("assets/settings/window.ini");
-
     int window_width = window_reader.GetInteger("window", "width", 800);
     int window_height = window_reader.GetInteger("window", "height", 800);
     std::string window_title = window_reader.Get("window", "title", "GCG 2023");
@@ -103,9 +90,6 @@ int main(int argc, char **argv)
     // Install a callback function, which gets invoked whenever a GLFW error occurred.
     glfwSetErrorCallback(errorCallbackFromGlfw);
 
-    /* --------------------------------------------- */
-    // Subtask 1.2: Create a Window with GLFW
-    /* --------------------------------------------- */
     if (!glfwInit())
     {
         VKL_EXIT_WITH_ERROR("Failed to init GLFW");
@@ -126,28 +110,11 @@ int main(int argc, char **argv)
         monitor = glfwGetPrimaryMonitor();
     }
 
-    GLFWwindow *window = glfwCreateWindow(window_width, window_height, window_title.c_str(), monitor, nullptr);
+    return glfwCreateWindow(window_width, window_height, window_title.c_str(), monitor, nullptr);
+}
 
-    if (!window)
-    {
-        VKL_LOG("If your program reaches this point, that means two things:");
-        VKL_LOG("1) Project setup was successful. Everything is working fine.");
-        VKL_LOG("2) You haven't implemented Subtask 1.2, which is creating a window with GLFW.");
-        VKL_EXIT_WITH_ERROR("No GLFW window created.");
-    }
-    VKL_LOG("Subtask 1.2 done.");
-
-    VkResult error;
-    VkInstance vk_instance = VK_NULL_HANDLE;              // To be set during Subtask 1.3
-    VkSurfaceKHR vk_surface = VK_NULL_HANDLE;             // To be set during Subtask 1.4
-    VkPhysicalDevice vk_physical_device = VK_NULL_HANDLE; // To be set during Subtask 1.5
-    VkDevice vk_device = VK_NULL_HANDLE;                  // To be set during Subtask 1.7
-    VkQueue vk_queue = VK_NULL_HANDLE;                    // To be set during Subtask 1.7
-    VkSwapchainKHR vk_swapchain = VK_NULL_HANDLE;         // To be set during Subtask 1.8
-
-    /* --------------------------------------------- */
-    // Subtask 1.3: Create a Vulkan Instance
-    /* --------------------------------------------- */
+VkInstance createVkInstance()
+{
     VkApplicationInfo application_info = {};                     // Zero-initialize every member
     application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO; // Set this struct instance's type
     application_info.pEngineName = "GCG_VK_Library";             // Set some properties...
@@ -175,78 +142,42 @@ int main(int argc, char **argv)
     instance_create_info.enabledLayerCount = 1;
     instance_create_info.ppEnabledLayerNames = enabled_layers;
 
-    error = vkCreateInstance(&instance_create_info, nullptr, &vk_instance);
+    VkInstance vkInstance = VK_NULL_HANDLE;
+    VkResult error = vkCreateInstance(&instance_create_info, nullptr, &vkInstance);
     VKL_CHECK_VULKAN_ERROR(error);
+    return vkInstance;
+}
 
-    if (!vk_instance)
-    {
-        VKL_EXIT_WITH_ERROR("No VkInstance created or handle not assigned.");
-    }
-    VKL_LOG("Subtask 1.3 done.");
+VkSurfaceKHR createVkSurface(VkInstance vkInstance, GLFWwindow *window)
+{
+    VkSurfaceKHR vkSurface = VK_NULL_HANDLE;
+    VkResult error = glfwCreateWindowSurface(vkInstance, window, nullptr, &vkSurface);
+    VKL_CHECK_VULKAN_ERROR(error);
+    return vkSurface;
+}
 
-    /* --------------------------------------------- */
-    // Subtask 1.4: Create a Vulkan Window Surface
-    /* --------------------------------------------- */
-
-    glfwCreateWindowSurface(vk_instance, window, nullptr, &vk_surface);
-    if (!vk_surface)
-    {
-        VKL_EXIT_WITH_ERROR("No VkSurfaceKHR created or handle not assigned.");
-    }
-    VKL_LOG("Subtask 1.4 done.");
-
-    /* --------------------------------------------- */
-    // Subtask 1.5: Pick a Physical Device
-    /* --------------------------------------------- */
-    // TODO: Use vkEnumeratePhysicalDevices get all the available physical device handles!
-    //       Select one that is suitable using the helper function selectPhysicalDeviceIndex and assign it to vk_physical_device!
+VkPhysicalDevice createVkPhysicalDevice(VkInstance vkInstance, VkSurfaceKHR vkSurface)
+{
+    VkPhysicalDevice vkPhysicalDevice = VK_NULL_HANDLE;
     uint32_t physical_device_count;
-    error = vkEnumeratePhysicalDevices(vk_instance, &physical_device_count, nullptr);
+    VkResult error = vkEnumeratePhysicalDevices(vkInstance, &physical_device_count, nullptr);
     VKL_CHECK_VULKAN_ERROR(error);
 
     std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
-    error = vkEnumeratePhysicalDevices(vk_instance, &physical_device_count, &physical_devices.front());
+    error = vkEnumeratePhysicalDevices(vkInstance, &physical_device_count, &physical_devices.front());
     VKL_CHECK_VULKAN_ERROR(error);
 
-    vk_physical_device = physical_devices[selectPhysicalDeviceIndex(physical_devices, vk_surface)];
+    uint32_t index = selectPhysicalDeviceIndex(physical_devices, vkSurface);
+    return physical_devices[index];
+}
 
-    if (!vk_physical_device)
-    {
-        VKL_EXIT_WITH_ERROR("No VkPhysicalDevice selected or handle not assigned.");
-    }
-    VKL_LOG("Subtask 1.5 done.");
-
-    /* --------------------------------------------- */
-    // Subtask 1.6: Select a Queue Family
-    /* --------------------------------------------- */
-    // TODO: Find a suitable queue family and assign its index to the following variable:
-    //       Hint: Use the function selectQueueFamilyIndex, but complete its implementation first!
-    uint32_t selected_queue_family_index = selectQueueFamilyIndex(vk_physical_device, vk_surface);
-
-    // Sanity check if we have selected a valid queue family index:
-    uint32_t queue_family_count = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties(vk_physical_device, &queue_family_count, nullptr);
-    if (selected_queue_family_index >= queue_family_count)
-    {
-        VKL_EXIT_WITH_ERROR("Invalid queue family index selected.");
-    }
-    VKL_LOG("Subtask 1.6 done.");
-
-    /* --------------------------------------------- */
-    // Subtask 1.7: Create a Logical Device and Get Queue
-    /* --------------------------------------------- */
-    // TODOs: - Create an instance of VkDeviceCreateInfo and use it to create one queue!
-    //        - Hook in the address of the VkDeviceQueueCreateInfo instance at the right place!
-    //        - Use VkDeviceCreateInfo::enabledExtensionCount and VkDeviceCreateInfo::ppEnabledExtensionNames
-    //          to enable the VK_KHR_SWAPCHAIN_EXTENSION_NAME device extension!
-    //        - Ensure that the other settings (which are unused in our case) are zero-initialized!
-    //        - Finally, use vkCreateDevice to create the device and assign its handle to vk_device!
-
+VkDevice createVkDevice(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamily)
+{
     float queue_priority = 1.0f;
     const char *required_device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     const VkDeviceQueueCreateInfo queue_create_info = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-        .queueFamilyIndex = selected_queue_family_index,
+        .queueFamilyIndex = queueFamily,
         .queueCount = 1,
         .pQueuePriorities = &queue_priority,
     };
@@ -257,34 +188,28 @@ int main(int argc, char **argv)
     device_create_info.queueCreateInfoCount = 1;
     device_create_info.pQueueCreateInfos = &queue_create_info;
 
-    error = vkCreateDevice(vk_physical_device, &device_create_info, nullptr, &vk_device);
+    VkDevice vkDevice = VK_NULL_HANDLE;
+    VkResult error = vkCreateDevice(vkPhysicalDevice, &device_create_info, nullptr, &vkDevice);
     VKL_CHECK_VULKAN_ERROR(error);
-    if (!vk_device)
-    {
-        VKL_EXIT_WITH_ERROR("No VkDevice created or handle not assigned.");
-    }
+    return vkDevice;
+}
 
-    // TODO: After device creation, use vkGetDeviceQueue to get the one and only created queue!
-    //       Assign its handle to vk_queue!
+struct VkDetailedImage
+{
+    VkImage image;
+    VkFormat format;
+    VkColorSpaceKHR colorSpace;
+    VkExtent2D extent;
+};
 
-    vkGetDeviceQueue(vk_device, selected_queue_family_index, 0, &vk_queue);
-
-    if (!vk_queue)
-    {
-        VKL_EXIT_WITH_ERROR("No VkQueue selected or handle not assigned.");
-    }
-    VKL_LOG("Subtask 1.7 done.");
-
-    /* --------------------------------------------- */
-    // Subtask 1.8: Create a Swapchain
-    /* --------------------------------------------- */
-    uint32_t queueFamilyIndexCount = 1u;
-    std::vector<uint32_t> queueFamilyIndices({selected_queue_family_index});
-    VkSurfaceCapabilitiesKHR surface_capabilities = getPhysicalDeviceSurfaceCapabilities(vk_physical_device, vk_surface);
+VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, VkSurfaceFormatKHR vkSurfaceImageFormat, GLFWwindow *window, uint32_t queueFamily, std::vector<VkDetailedImage> &images)
+{
+    std::vector<uint32_t> queueFamilyIndices({queueFamily});
+    VkSurfaceCapabilitiesKHR surface_capabilities = getPhysicalDeviceSurfaceCapabilities(vkPhysicalDevice, vkSurface);
     // Build the swapchain config struct:
     VkSwapchainCreateInfoKHR swapchain_create_info = {};
     swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_create_info.surface = vk_surface;
+    swapchain_create_info.surface = vkSurface;
     swapchain_create_info.minImageCount = surface_capabilities.minImageCount;
     swapchain_create_info.imageArrayLayers = 1u;
     swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -300,55 +225,55 @@ int main(int argc, char **argv)
     swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     swapchain_create_info.clipped = VK_TRUE;
     swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    swapchain_create_info.queueFamilyIndexCount = queueFamilyIndexCount;
+    swapchain_create_info.queueFamilyIndexCount = 1u;
     swapchain_create_info.pQueueFamilyIndices = queueFamilyIndices.data();
-    // TODO: Provide values for:
-    //        - VkSwapchainCreateInfoKHR::queueFamilyIndexCount
-    //        - VkSwapchainCreateInfoKHR::pQueueFamilyIndices
-    //        - VkSwapchainCreateInfoKHR::imageFormat
-    //        - VkSwapchainCreateInfoKHR::imageColorSpace
-    //        - VkSwapchainCreateInfoKHR::imageExtent
-    //        - VkSwapchainCreateInfoKHR::presentMode
-    VkSurfaceFormatKHR surface_image_format = getSurfaceImageFormat(vk_physical_device, vk_surface);
-    swapchain_create_info.imageFormat = surface_image_format.format;
-    swapchain_create_info.imageColorSpace = surface_image_format.colorSpace;
-    swapchain_create_info.imageExtent = {(uint32_t)window_width, (uint32_t)window_height};
+
+    int clientWidth = 0, clientHeight = 0;
+    glfwGetFramebufferSize(window, &clientWidth, &clientHeight);
+
+    swapchain_create_info.imageFormat = vkSurfaceImageFormat.format;
+    swapchain_create_info.imageColorSpace = vkSurfaceImageFormat.colorSpace;
+    swapchain_create_info.imageExtent = {(uint32_t)clientWidth, (uint32_t)clientHeight};
     swapchain_create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    // TODO: Create the swapchain using vkCreateSwapchainKHR and assign its handle to vk_swapchain!
-    error = vkCreateSwapchainKHR(vk_device, &swapchain_create_info, nullptr, &vk_swapchain);
+    VkSwapchainKHR vkSwapchain = VK_NULL_HANDLE;
+    VkResult error = vkCreateSwapchainKHR(vkDevice, &swapchain_create_info, nullptr, &vkSwapchain);
     VKL_CHECK_VULKAN_ERROR(error);
 
-    if (!vk_swapchain)
+    uint32_t swapchainImageCount = 0u;
+    error = vkGetSwapchainImagesKHR(vkDevice, vkSwapchain, &swapchainImageCount, nullptr);
+    VKL_CHECK_VULKAN_ERROR(error);
+    std::vector<VkImage> swapchainImages(swapchainImageCount);
+    error = vkGetSwapchainImagesKHR(vkDevice, vkSwapchain, &swapchainImageCount, &swapchainImages.front());
+    VKL_CHECK_VULKAN_ERROR(error);
+
+    if (swapchainImageCount != surface_capabilities.minImageCount)
     {
-        VKL_EXIT_WITH_ERROR("No VkSwapchainKHR created or handle not assigned.");
+        VKL_LOG("Swapchain image count does NOT match! " << std::to_string(swapchainImageCount) << " != " << std::to_string(surface_capabilities.minImageCount));
     }
 
-    // TODO: Use vkGetSwapchainImagesKHR to retrieve the created VkImage handles and store them in a collection (e.g., std::vector)!
-    uint32_t swapchain_image_count = 0u;
-    error = vkGetSwapchainImagesKHR(vk_device, vk_swapchain, &swapchain_image_count, nullptr);
-    VKL_CHECK_VULKAN_ERROR(error);
-    std::vector<VkImage> swapchain_images(swapchain_image_count);
-    error = vkGetSwapchainImagesKHR(vk_device, vk_swapchain, &swapchain_image_count, &swapchain_images.front());
-    VKL_CHECK_VULKAN_ERROR(error);
-
-    if (swapchain_image_count != surface_capabilities.minImageCount)
+    images.reserve(swapchainImages.size());
+    for (const auto &image : swapchainImages)
     {
-        VKL_LOG("Swapchain image count does NOT match! " << std::to_string(swapchain_image_count) << " != " << std::to_string(surface_capabilities.minImageCount));
+        images.push_back({
+            .image = image,
+            .format = swapchain_create_info.imageFormat,
+            .colorSpace = swapchain_create_info.imageColorSpace,
+            .extent = {(uint32_t)clientWidth, (uint32_t)clientHeight},
+        });
     }
 
-    VKL_LOG("Subtask 1.8 done.");
+    return vkSwapchain;
+}
 
-    /* --------------------------------------------- */
-    // Subtask 1.9: Init GCG Framework
-    /* --------------------------------------------- */
-
+VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vector<VkDetailedImage> &images)
+{
     std::vector<VklSwapchainFramebufferComposition> swapchain_image_compositions;
-    for (size_t i = 0; i < swapchain_image_count; i++)
+    for (size_t i = 0; i < images.size(); i++)
     {
         VklSwapchainFramebufferComposition composition = {
             .colorAttachmentImageDetails = {
-                .imageHandle = swapchain_images[i],
-                .imageFormat = surface_image_format.format,
+                .imageHandle = images[i].image,
+                .imageFormat = images[i].format,
                 .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                 .clearValue = {0.8, 1.0, 1.0, 1.0},
             },
@@ -358,23 +283,79 @@ int main(int argc, char **argv)
     }
 
     // Gather swapchain config as required by the framework:
-    VklSwapchainConfig swapchain_config = {
-        .swapchainHandle = vk_swapchain,
-        .imageExtent = {(uint32_t)window_width, (uint32_t)window_height},
+    return {
+        .swapchainHandle = vkSwapchain,
+        .imageExtent = images[0].extent,
         .swapchainImages = swapchain_image_compositions,
     };
+}
+
+#pragma endregion
+
+/* --------------------------------------------- */
+// Main
+/* --------------------------------------------- */
+
+int main(int argc, char **argv)
+{
+    VKL_LOG(":::::: WELCOME TO GCG 2023 ::::::");
+
+    CMDLineArgs cmdline_args;
+    gcgParseArgs(cmdline_args, argc, argv);
+
+    GLFWwindow *window = createGLFWWindow();
+
+    if (!window)
+    {
+        VKL_EXIT_WITH_ERROR("No GLFW window created.");
+    }
+
+    VkInstance vk_instance = createVkInstance();
+    VkSurfaceKHR vk_surface = createVkSurface(vk_instance, window);
+    VkPhysicalDevice vk_physical_device = createVkPhysicalDevice(vk_instance, vk_surface);
+    uint32_t graphics_queue_family = selectQueueFamilyIndex(vk_physical_device, vk_surface);
+    VkDevice vk_device = createVkDevice(vk_physical_device, graphics_queue_family);
+    VkQueue vk_queue = VK_NULL_HANDLE;
+    vkGetDeviceQueue(vk_device, graphics_queue_family, 0, &vk_queue);
+    std::vector<VkDetailedImage> swapchain_images;
+    VkSurfaceFormatKHR vk_surface_image_format = getSurfaceImageFormat(vk_physical_device, vk_surface);
+    VkSwapchainKHR vk_swapchain = createVkSwapchain(vk_physical_device, vk_device, vk_surface, vk_surface_image_format, window, graphics_queue_family, swapchain_images);
+
+#pragma region check_instances
+    if (!vk_instance)
+    {
+        VKL_EXIT_WITH_ERROR("No VkInstance created or handle not assigned.");
+    }
+    if (!vk_surface)
+    {
+        VKL_EXIT_WITH_ERROR("No VkSurfaceKHR created or handle not assigned.");
+    }
+    if (!vk_physical_device)
+    {
+        VKL_EXIT_WITH_ERROR("No VkPhysicalDevice selected or handle not assigned.");
+    }
+    if (!vk_device)
+    {
+        VKL_EXIT_WITH_ERROR("No VkDevice created or handle not assigned.");
+    }
+    if (!vk_queue)
+    {
+        VKL_EXIT_WITH_ERROR("No VkQueue selected or handle not assigned.");
+    }
+    if (!vk_swapchain)
+    {
+        VKL_EXIT_WITH_ERROR("No VkSwapchainKHR created or handle not assigned.");
+    }
+#pragma endregion
+
+    // Gather swapchain config as required by the framework:
+    VklSwapchainConfig swapchain_config = createVklSwapchainConfig(vk_swapchain, swapchain_images);
 
     // Init the framework:
     if (!gcgInitFramework(vk_instance, vk_surface, vk_physical_device, vk_device, vk_queue, swapchain_config))
     {
         VKL_EXIT_WITH_ERROR("Failed to init framework");
     }
-    VKL_LOG("Subtask 1.9 done.");
-
-    /* --------------------------------------------- */
-    // Subtask 1.10: Set-up the Render Loop
-    // Subtask 1.11: Register a Key Callback
-    /* --------------------------------------------- */
 
     glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods)
                        {
@@ -400,9 +381,11 @@ int main(int argc, char **argv)
             {
                 screenshot_filename = cmdline_args.filename;
             }
-            gcgSaveScreenshot(screenshot_filename, swapchain_images[idx], window_width,
-                              window_height, surface_image_format.format, vk_device, vk_physical_device, vk_queue,
-                              selected_queue_family_index);
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            gcgSaveScreenshot(screenshot_filename, swapchain_images[idx].image, width,
+                              height, vk_surface_image_format.format, vk_device, vk_physical_device, vk_queue,
+                              graphics_queue_family);
             break;
         }
     }
@@ -410,9 +393,6 @@ int main(int argc, char **argv)
     // Wait for all GPU work to finish before cleaning up:
     vkDeviceWaitIdle(vk_device);
 
-    /* --------------------------------------------- */
-    // Subtask 1.12: Cleanup
-    /* --------------------------------------------- */
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
     vkDestroyDevice(vk_device, nullptr);
