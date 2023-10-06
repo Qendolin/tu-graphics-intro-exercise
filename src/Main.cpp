@@ -290,6 +290,95 @@ VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vec
     };
 }
 
+VkDescriptorPool createVkDescriptorPool(VkDevice vkDevice, uint32_t maxSets, uint32_t descriptorCount)
+{
+    VkDescriptorPoolSize descriptor_pool_size = {
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = descriptorCount,
+    };
+    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = maxSets,
+        .poolSizeCount = 1,
+        .pPoolSizes = &descriptor_pool_size,
+    };
+    VkDescriptorPool vkDescriptorPool = VK_NULL_HANDLE;
+    VkResult error = vkCreateDescriptorPool(vkDevice, &descriptor_pool_create_info, nullptr, &vkDescriptorPool);
+    VKL_CHECK_VULKAN_ERROR(error);
+
+    return vkDescriptorPool;
+}
+
+struct DescriptorSetLayoutParams
+{
+    uint32_t binding;
+    VkDescriptorType type;
+};
+
+VkDescriptorSetLayout createVkDescriptorSetLayout(VkDevice vkDevice, std::vector<DescriptorSetLayoutParams> params)
+{
+    VkDescriptorSetLayoutBinding descriptor_set_layout_binding = {
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_ALL,
+    };
+    std::vector<VkDescriptorSetLayoutBinding> bindings(params.size());
+    for (auto &param : params)
+    {
+        bindings.push_back({
+            .binding = param.binding,
+            .descriptorType = param.type,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_ALL,
+        });
+    }
+    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = bindings.size(),
+        .pBindings = &bindings.front(),
+    };
+    VkDescriptorSetLayout vkDescriptorSetLayout = VK_NULL_HANDLE;
+    VkResult error = vkCreateDescriptorSetLayout(vkDevice, &descriptor_set_layout_create_info, nullptr, &vkDescriptorSetLayout);
+    VKL_CHECK_VULKAN_ERROR(error);
+
+    return vkDescriptorSetLayout;
+}
+
+VkDescriptorSet createVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout)
+{
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = vkDescriptorPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &vkDescriptorSetLayout,
+    };
+    VkDescriptorSet vkDescriptorSet = VK_NULL_HANDLE;
+    VkResult error = vkAllocateDescriptorSets(vkDevice, &descriptor_set_allocate_info, &vkDescriptorSet);
+    VKL_CHECK_VULKAN_ERROR(error);
+
+    return vkDescriptorSet;
+}
+
+void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkBuffer buffer, size_t size)
+{
+    VkDescriptorBufferInfo bufferInfo = {
+        .buffer = buffer,
+        .offset = 0,
+        .range = size,
+    };
+    VkWriteDescriptorSet vk_write_descriptor_set = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = dst,
+        .dstBinding = binding,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo = &bufferInfo,
+    };
+    vkUpdateDescriptorSets(vkDevice, 1, &vk_write_descriptor_set, 0, nullptr);
+}
+
 class Camera
 {
 public:
@@ -355,7 +444,7 @@ struct Vertex
     glm::vec3 position;
 };
 
-struct FragmentUniformBlock
+struct CombinedUniformBlock
 {
     glm::vec4 color;
     glm::mat4 viewProjectionMatrix;
@@ -459,67 +548,23 @@ int main(int argc, char **argv)
         }},
     };
     VkPipeline vk_pipeline = vklCreateGraphicsPipeline(graphics_pipeline_config);
-    VkBuffer fragment_uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(FragmentUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    FragmentUniformBlock fragment_uniform_data = {
+    VkBuffer uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CombinedUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    CombinedUniformBlock fragment_uniform_data = {
         .color = {1.0, 0.5, 0.0, 1.0},
         .viewProjectionMatrix = camera->viewProjectionMatrix,
     };
-    vklCopyDataIntoHostCoherentBuffer(fragment_uniform_buffer, &fragment_uniform_data, sizeof(FragmentUniformBlock));
+    vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &fragment_uniform_data, sizeof(CombinedUniformBlock));
 
-    VkDescriptorPoolSize descriptor_pool_size = {
-        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 8,
-    };
-    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = 8,
-        .poolSizeCount = 1,
-        .pPoolSizes = &descriptor_pool_size,
-    };
-    VkDescriptorPool vk_descriptor_pool = VK_NULL_HANDLE;
-    VkResult error = vkCreateDescriptorPool(vk_device, &descriptor_pool_create_info, nullptr, &vk_descriptor_pool);
-    VKL_CHECK_VULKAN_ERROR(error);
+    VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 8, 16);
+    VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
+        vk_device,
+        {{
+            .binding = 0,
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        }});
 
-    VkDescriptorSetLayoutBinding descriptor_set_layout_binding = {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-    };
-    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &descriptor_set_layout_binding,
-    };
-    VkDescriptorSetLayout vk_descriptor_set_layout = VK_NULL_HANDLE;
-    error = vkCreateDescriptorSetLayout(vk_device, &descriptor_set_layout_create_info, nullptr, &vk_descriptor_set_layout);
-    VKL_CHECK_VULKAN_ERROR(error);
-
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = vk_descriptor_pool,
-        .descriptorSetCount = 1,
-        .pSetLayouts = &vk_descriptor_set_layout,
-    };
-    VkDescriptorSet vk_descriptor_set = VK_NULL_HANDLE;
-    error = vkAllocateDescriptorSets(vk_device, &descriptor_set_allocate_info, &vk_descriptor_set);
-    VKL_CHECK_VULKAN_ERROR(error);
-
-    VkDescriptorBufferInfo fragment_uniform_buffer_info = {
-        .buffer = fragment_uniform_buffer,
-        .offset = 0,
-        .range = sizeof(FragmentUniformBlock),
-    };
-    VkWriteDescriptorSet vk_write_descriptor_set = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = vk_descriptor_set,
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .pBufferInfo = &fragment_uniform_buffer_info,
-    };
-    vkUpdateDescriptorSets(vk_device, 1, &vk_write_descriptor_set, 0, nullptr);
+    VkDescriptorSet vk_descriptor_set = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
+    writeDescriptorSetBuffer(vk_device, vk_descriptor_set, 0, uniform_buffer, sizeof(CombinedUniformBlock));
 
     glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods)
                        {
@@ -560,7 +605,7 @@ int main(int argc, char **argv)
 
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(fragment_uniform_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
     vklDestroyGraphicsPipeline(vk_pipeline);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
