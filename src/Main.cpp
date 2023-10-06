@@ -228,12 +228,12 @@ VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkD
     swapchain_create_info.queueFamilyIndexCount = 1u;
     swapchain_create_info.pQueueFamilyIndices = queueFamilyIndices.data();
 
-    int clientWidth = 0, clientHeight = 0;
-    glfwGetFramebufferSize(window, &clientWidth, &clientHeight);
+    int viewportWidth = 0, viewportHeight = 0;
+    glfwGetFramebufferSize(window, &viewportWidth, &viewportHeight);
 
     swapchain_create_info.imageFormat = vkSurfaceImageFormat.format;
     swapchain_create_info.imageColorSpace = vkSurfaceImageFormat.colorSpace;
-    swapchain_create_info.imageExtent = {(uint32_t)clientWidth, (uint32_t)clientHeight};
+    swapchain_create_info.imageExtent = {(uint32_t)viewportWidth, (uint32_t)viewportHeight};
     swapchain_create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
     VkSwapchainKHR vkSwapchain = VK_NULL_HANDLE;
     VkResult error = vkCreateSwapchainKHR(vkDevice, &swapchain_create_info, nullptr, &vkSwapchain);
@@ -258,7 +258,7 @@ VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkD
             .image = image,
             .format = swapchain_create_info.imageFormat,
             .colorSpace = swapchain_create_info.imageColorSpace,
-            .extent = {(uint32_t)clientWidth, (uint32_t)clientHeight},
+            .extent = {(uint32_t)viewportWidth, (uint32_t)viewportHeight},
         });
     }
 
@@ -290,6 +290,64 @@ VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vec
     };
 }
 
+class Camera
+{
+public:
+    float fovRad;
+    glm::vec2 viewportSize;
+    float nearPlane;
+    float farPlane;
+    glm::vec3 position;
+    glm::vec3 angles;
+    glm::mat4 viewMatrix;
+    glm::mat4 projectionMatrix;
+    glm::mat4 viewProjectionMatrix;
+
+    Camera(float fovRad, glm::vec2 viewportSize, float nearPlane, float farPlane, glm::vec3 position, glm::vec3 angles)
+    {
+        this->fovRad = fovRad;
+        this->viewportSize = viewportSize;
+        this->nearPlane = nearPlane;
+        this->farPlane = farPlane;
+        this->position = position;
+        this->angles = angles;
+        updateProjection();
+        updateView();
+    }
+
+    void updateProjection()
+    {
+        float aspect = viewportSize.x / viewportSize.y;
+        projectionMatrix = gcgCreatePerspectiveProjectionMatrix(fovRad, aspect, nearPlane, farPlane);
+        viewProjectionMatrix = projectionMatrix * viewMatrix;
+    }
+
+    void updateView()
+    {
+        viewMatrix = glm::mat4(1.0f);
+        viewMatrix = glm::translate(viewMatrix, position);
+        viewMatrix = glm::rotate(viewMatrix, angles.x, {1, 0, 0});
+        viewMatrix = glm::rotate(viewMatrix, angles.y, {0, 1, 0});
+        viewMatrix = glm::rotate(viewMatrix, angles.z, {0, 0, 1});
+        viewMatrix = glm::inverse(viewMatrix);
+        viewProjectionMatrix = projectionMatrix * viewMatrix;
+    }
+};
+
+std::unique_ptr<Camera> createCamera(std::string init_path, GLFWwindow *window)
+{
+    INIReader camera_ini_reader(init_path);
+    double fovDeg = camera_ini_reader.GetReal("camera", "fov", 60);
+    double nearPlane = camera_ini_reader.GetReal("camera", "near", 0.1);
+    double farPlane = camera_ini_reader.GetReal("camera", "far", 100.0);
+    double yaw = camera_ini_reader.GetReal("camera", "yaw", 0.0);
+    double pitch = camera_ini_reader.GetReal("camera", "pitch", 0.0);
+
+    int viewportWidth, viewportHeight;
+    glfwGetFramebufferSize(window, &viewportWidth, &viewportHeight);
+    return std::make_unique<Camera>(glm::radians(fovDeg), glm::vec2(viewportWidth, viewportHeight), nearPlane, farPlane, glm::vec3(), glm::vec3(pitch, yaw, 0));
+}
+
 #pragma endregion
 
 struct Vertex
@@ -300,6 +358,7 @@ struct Vertex
 struct FragmentUniformBlock
 {
     glm::vec4 color;
+    glm::mat4 viewProjectionMatrix;
 };
 
 /* --------------------------------------------- */
@@ -367,6 +426,15 @@ int main(int argc, char **argv)
         VKL_EXIT_WITH_ERROR("Failed to init framework");
     }
 
+    std::string init_camera_filepath = "assets/settings/camera_front.ini";
+    if (cmdline_args.init_camera)
+    {
+        init_camera_filepath = cmdline_args.init_camera_filepath;
+    }
+    auto camera = createCamera(init_camera_filepath, window);
+    camera->position = glm::vec3(camera->viewMatrix * glm::vec4(0, 0, 5, 1));
+    camera->updateView();
+
     VklGraphicsPipelineConfig graphics_pipeline_config = {
         .vertexShaderPath = "assets/shaders_vk/task2.vert",
         .fragmentShaderPath = "assets/shaders_vk/task2.frag",
@@ -387,13 +455,14 @@ int main(int argc, char **argv)
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
         }},
     };
     VkPipeline vk_pipeline = vklCreateGraphicsPipeline(graphics_pipeline_config);
     VkBuffer fragment_uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(FragmentUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     FragmentUniformBlock fragment_uniform_data = {
         .color = {1.0, 0.5, 0.0, 1.0},
+        .viewProjectionMatrix = camera->viewProjectionMatrix,
     };
     vklCopyDataIntoHostCoherentBuffer(fragment_uniform_buffer, &fragment_uniform_data, sizeof(FragmentUniformBlock));
 
@@ -415,7 +484,7 @@ int main(int argc, char **argv)
         .binding = 0,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
     };
     VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -478,7 +547,7 @@ int main(int argc, char **argv)
                 screenshot_filename = cmdline_args.filename;
             }
             int width, height;
-            glfwGetWindowSize(window, &width, &height);
+            glfwGetFramebufferSize(window, &width, &height);
             gcgSaveScreenshot(screenshot_filename, swapchain_images[idx].image, width,
                               height, vk_surface_image_format.format, vk_device, vk_physical_device, vk_queue,
                               graphics_queue_family);

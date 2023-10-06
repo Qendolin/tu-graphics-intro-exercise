@@ -1,12 +1,9 @@
 #version 450
 
+layout(location = 0) in vec4 in_color;
+
 layout(location = 0) out vec4 out_color;
 
-layout(binding = 0) uniform UniformBlock
-{
-	vec4 u_color;
-};
-
 void main() {
-	out_color = u_color;
+	out_color = in_color;
 }
