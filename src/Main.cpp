@@ -123,9 +123,9 @@ VkInstance createVkInstance()
     application_info.applicationVersion = VK_MAKE_API_VERSION(0, 2023, 9, 19);
     application_info.apiVersion = VK_API_VERSION_1_1; // Your system needs to support this Vulkan API version.
 
-    VkInstanceCreateInfo instance_create_info = {};                      // Zero-initialize every member
-    instance_create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO; // Set the struct's type
-    instance_create_info.pApplicationInfo = &application_info;
+    VkInstanceCreateInfo instanceCreateInfo = {};                      // Zero-initialize every member
+    instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO; // Set the struct's type
+    instanceCreateInfo.pApplicationInfo = &application_info;
 
     uint32_t required_glfw_extensions_count, required_vulkan_extension_count;
     const char **required_glfw_extensions = glfwGetRequiredInstanceExtensions(&required_glfw_extensions_count);
@@ -137,13 +137,13 @@ VkInstance createVkInstance()
     required_extensions.insert(required_extensions.end(), required_glfw_extensions, required_glfw_extensions + required_glfw_extensions_count);
     required_extensions.insert(required_extensions.end(), required_vulkan_extensions, required_vulkan_extensions + required_vulkan_extension_count);
 
-    instance_create_info.enabledExtensionCount = required_extensions.size();
-    instance_create_info.ppEnabledExtensionNames = &required_extensions.front();
-    instance_create_info.enabledLayerCount = 1;
-    instance_create_info.ppEnabledLayerNames = enabled_layers;
+    instanceCreateInfo.enabledExtensionCount = required_extensions.size();
+    instanceCreateInfo.ppEnabledExtensionNames = &required_extensions.front();
+    instanceCreateInfo.enabledLayerCount = 1;
+    instanceCreateInfo.ppEnabledLayerNames = enabled_layers;
 
     VkInstance vkInstance = VK_NULL_HANDLE;
-    VkResult error = vkCreateInstance(&instance_create_info, nullptr, &vkInstance);
+    VkResult error = vkCreateInstance(&instanceCreateInfo, nullptr, &vkInstance);
     VKL_CHECK_VULKAN_ERROR(error);
     return vkInstance;
 }
@@ -159,16 +159,16 @@ VkSurfaceKHR createVkSurface(VkInstance vkInstance, GLFWwindow *window)
 VkPhysicalDevice createVkPhysicalDevice(VkInstance vkInstance, VkSurfaceKHR vkSurface)
 {
     VkPhysicalDevice vkPhysicalDevice = VK_NULL_HANDLE;
-    uint32_t physical_device_count;
-    VkResult error = vkEnumeratePhysicalDevices(vkInstance, &physical_device_count, nullptr);
+    uint32_t physicalDeviceCount;
+    VkResult error = vkEnumeratePhysicalDevices(vkInstance, &physicalDeviceCount, nullptr);
     VKL_CHECK_VULKAN_ERROR(error);
 
-    std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
-    error = vkEnumeratePhysicalDevices(vkInstance, &physical_device_count, &physical_devices.front());
+    std::vector<VkPhysicalDevice> physicalDevices(physicalDeviceCount);
+    error = vkEnumeratePhysicalDevices(vkInstance, &physicalDeviceCount, &physicalDevices.front());
     VKL_CHECK_VULKAN_ERROR(error);
 
-    uint32_t index = selectPhysicalDeviceIndex(physical_devices, vkSurface);
-    return physical_devices[index];
+    uint32_t index = selectPhysicalDeviceIndex(physicalDevices, vkSurface);
+    return physicalDevices[index];
 }
 
 VkDevice createVkDevice(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamily)
@@ -181,15 +181,15 @@ VkDevice createVkDevice(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamily)
         .queueCount = 1,
         .pQueuePriorities = &queue_priority,
     };
-    VkDeviceCreateInfo device_create_info = {};
-    device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    device_create_info.enabledExtensionCount = 1;
-    device_create_info.ppEnabledExtensionNames = &required_device_extensions;
-    device_create_info.queueCreateInfoCount = 1;
-    device_create_info.pQueueCreateInfos = &queue_create_info;
+    VkDeviceCreateInfo deviceCreateInfo = {};
+    deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceCreateInfo.enabledExtensionCount = 1;
+    deviceCreateInfo.ppEnabledExtensionNames = &required_device_extensions;
+    deviceCreateInfo.queueCreateInfoCount = 1;
+    deviceCreateInfo.pQueueCreateInfos = &queue_create_info;
 
     VkDevice vkDevice = VK_NULL_HANDLE;
-    VkResult error = vkCreateDevice(vkPhysicalDevice, &device_create_info, nullptr, &vkDevice);
+    VkResult error = vkCreateDevice(vkPhysicalDevice, &deviceCreateInfo, nullptr, &vkDevice);
     VKL_CHECK_VULKAN_ERROR(error);
     return vkDevice;
 }
@@ -205,38 +205,38 @@ struct VkDetailedImage
 VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, VkSurfaceFormatKHR vkSurfaceImageFormat, GLFWwindow *window, uint32_t queueFamily, std::vector<VkDetailedImage> &images)
 {
     std::vector<uint32_t> queueFamilyIndices({queueFamily});
-    VkSurfaceCapabilitiesKHR surface_capabilities = getPhysicalDeviceSurfaceCapabilities(vkPhysicalDevice, vkSurface);
+    VkSurfaceCapabilitiesKHR surfaceCapabilities = getPhysicalDeviceSurfaceCapabilities(vkPhysicalDevice, vkSurface);
     // Build the swapchain config struct:
-    VkSwapchainCreateInfoKHR swapchain_create_info = {};
-    swapchain_create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    swapchain_create_info.surface = vkSurface;
-    swapchain_create_info.minImageCount = surface_capabilities.minImageCount;
-    swapchain_create_info.imageArrayLayers = 1u;
-    swapchain_create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    if (surface_capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
+    VkSwapchainCreateInfoKHR swapchainCreateInfo = {};
+    swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchainCreateInfo.surface = vkSurface;
+    swapchainCreateInfo.minImageCount = surfaceCapabilities.minImageCount;
+    swapchainCreateInfo.imageArrayLayers = 1u;
+    swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if (surfaceCapabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
     {
-        swapchain_create_info.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        swapchainCreateInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     }
     else
     {
         std::cout << "Warning: Automatic Testing might fail, VK_IMAGE_USAGE_TRANSFER_SRC_BIT image usage is not supported" << std::endl;
     }
-    swapchain_create_info.preTransform = surface_capabilities.currentTransform;
-    swapchain_create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    swapchain_create_info.clipped = VK_TRUE;
-    swapchain_create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    swapchain_create_info.queueFamilyIndexCount = 1u;
-    swapchain_create_info.pQueueFamilyIndices = queueFamilyIndices.data();
+    swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+    swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    swapchainCreateInfo.clipped = VK_TRUE;
+    swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchainCreateInfo.queueFamilyIndexCount = 1u;
+    swapchainCreateInfo.pQueueFamilyIndices = queueFamilyIndices.data();
 
     int viewportWidth = 0, viewportHeight = 0;
     glfwGetFramebufferSize(window, &viewportWidth, &viewportHeight);
 
-    swapchain_create_info.imageFormat = vkSurfaceImageFormat.format;
-    swapchain_create_info.imageColorSpace = vkSurfaceImageFormat.colorSpace;
-    swapchain_create_info.imageExtent = {(uint32_t)viewportWidth, (uint32_t)viewportHeight};
-    swapchain_create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    swapchainCreateInfo.imageFormat = vkSurfaceImageFormat.format;
+    swapchainCreateInfo.imageColorSpace = vkSurfaceImageFormat.colorSpace;
+    swapchainCreateInfo.imageExtent = {(uint32_t)viewportWidth, (uint32_t)viewportHeight};
+    swapchainCreateInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
     VkSwapchainKHR vkSwapchain = VK_NULL_HANDLE;
-    VkResult error = vkCreateSwapchainKHR(vkDevice, &swapchain_create_info, nullptr, &vkSwapchain);
+    VkResult error = vkCreateSwapchainKHR(vkDevice, &swapchainCreateInfo, nullptr, &vkSwapchain);
     VKL_CHECK_VULKAN_ERROR(error);
 
     uint32_t swapchainImageCount = 0u;
@@ -246,9 +246,9 @@ VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkD
     error = vkGetSwapchainImagesKHR(vkDevice, vkSwapchain, &swapchainImageCount, &swapchainImages.front());
     VKL_CHECK_VULKAN_ERROR(error);
 
-    if (swapchainImageCount != surface_capabilities.minImageCount)
+    if (swapchainImageCount != surfaceCapabilities.minImageCount)
     {
-        VKL_LOG("Swapchain image count does NOT match! " << std::to_string(swapchainImageCount) << " != " << std::to_string(surface_capabilities.minImageCount));
+        VKL_LOG("Swapchain image count does NOT match! " << std::to_string(swapchainImageCount) << " != " << std::to_string(surfaceCapabilities.minImageCount));
     }
 
     images.reserve(swapchainImages.size());
@@ -256,8 +256,8 @@ VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkD
     {
         images.push_back({
             .image = image,
-            .format = swapchain_create_info.imageFormat,
-            .colorSpace = swapchain_create_info.imageColorSpace,
+            .format = swapchainCreateInfo.imageFormat,
+            .colorSpace = swapchainCreateInfo.imageColorSpace,
             .extent = {(uint32_t)viewportWidth, (uint32_t)viewportHeight},
         });
     }
@@ -267,7 +267,7 @@ VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkD
 
 VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vector<VkDetailedImage> &images)
 {
-    std::vector<VklSwapchainFramebufferComposition> swapchain_image_compositions;
+    std::vector<VklSwapchainFramebufferComposition> swapchainImageCompositions;
     for (size_t i = 0; i < images.size(); i++)
     {
         VklSwapchainFramebufferComposition composition = {
@@ -279,31 +279,31 @@ VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vec
             },
             .depthAttachmentImageDetails = {},
         };
-        swapchain_image_compositions.push_back(composition);
+        swapchainImageCompositions.push_back(composition);
     }
 
     // Gather swapchain config as required by the framework:
     return {
         .swapchainHandle = vkSwapchain,
         .imageExtent = images[0].extent,
-        .swapchainImages = swapchain_image_compositions,
+        .swapchainImages = swapchainImageCompositions,
     };
 }
 
 VkDescriptorPool createVkDescriptorPool(VkDevice vkDevice, uint32_t maxSets, uint32_t descriptorCount)
 {
-    VkDescriptorPoolSize descriptor_pool_size = {
+    VkDescriptorPoolSize descriptorPoolSize = {
         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptorCount = descriptorCount,
     };
-    VkDescriptorPoolCreateInfo descriptor_pool_create_info = {
+    VkDescriptorPoolCreateInfo descriptorÜoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = maxSets,
         .poolSizeCount = 1,
-        .pPoolSizes = &descriptor_pool_size,
+        .pPoolSizes = &descriptorPoolSize,
     };
     VkDescriptorPool vkDescriptorPool = VK_NULL_HANDLE;
-    VkResult error = vkCreateDescriptorPool(vkDevice, &descriptor_pool_create_info, nullptr, &vkDescriptorPool);
+    VkResult error = vkCreateDescriptorPool(vkDevice, &descriptorÜoolCreateInfo, nullptr, &vkDescriptorPool);
     VKL_CHECK_VULKAN_ERROR(error);
 
     return vkDescriptorPool;
@@ -317,13 +317,8 @@ struct DescriptorSetLayoutParams
 
 VkDescriptorSetLayout createVkDescriptorSetLayout(VkDevice vkDevice, std::vector<DescriptorSetLayoutParams> params)
 {
-    VkDescriptorSetLayoutBinding descriptor_set_layout_binding = {
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_ALL,
-    };
-    std::vector<VkDescriptorSetLayoutBinding> bindings(params.size());
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    bindings.reserve(params.size());
     for (auto &param : params)
     {
         bindings.push_back({
@@ -333,13 +328,13 @@ VkDescriptorSetLayout createVkDescriptorSetLayout(VkDevice vkDevice, std::vector
             .stageFlags = VK_SHADER_STAGE_ALL,
         });
     }
-    VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = bindings.size(),
+        .bindingCount = uint32_t(bindings.size()),
         .pBindings = &bindings.front(),
     };
     VkDescriptorSetLayout vkDescriptorSetLayout = VK_NULL_HANDLE;
-    VkResult error = vkCreateDescriptorSetLayout(vkDevice, &descriptor_set_layout_create_info, nullptr, &vkDescriptorSetLayout);
+    VkResult error = vkCreateDescriptorSetLayout(vkDevice, &descriptorSetLayoutCreateInfo, nullptr, &vkDescriptorSetLayout);
     VKL_CHECK_VULKAN_ERROR(error);
 
     return vkDescriptorSetLayout;
@@ -347,14 +342,14 @@ VkDescriptorSetLayout createVkDescriptorSetLayout(VkDevice vkDevice, std::vector
 
 VkDescriptorSet createVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout)
 {
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info = {
+    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
         .descriptorPool = vkDescriptorPool,
         .descriptorSetCount = 1,
         .pSetLayouts = &vkDescriptorSetLayout,
     };
     VkDescriptorSet vkDescriptorSet = VK_NULL_HANDLE;
-    VkResult error = vkAllocateDescriptorSets(vkDevice, &descriptor_set_allocate_info, &vkDescriptorSet);
+    VkResult error = vkAllocateDescriptorSets(vkDevice, &descriptorSetAllocateInfo, &vkDescriptorSet);
     VKL_CHECK_VULKAN_ERROR(error);
 
     return vkDescriptorSet;
@@ -367,7 +362,7 @@ void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t b
         .offset = 0,
         .range = size,
     };
-    VkWriteDescriptorSet vk_write_descriptor_set = {
+    VkWriteDescriptorSet vkWriteDescriptorSet = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = dst,
         .dstBinding = binding,
@@ -376,7 +371,7 @@ void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t b
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &bufferInfo,
     };
-    vkUpdateDescriptorSets(vkDevice, 1, &vk_write_descriptor_set, 0, nullptr);
+    vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, nullptr);
 }
 
 class Camera
@@ -544,7 +539,7 @@ int main(int argc, char **argv)
             .binding = 0,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+            .stageFlags = VK_SHADER_STAGE_ALL,
         }},
     };
     VkPipeline vk_pipeline = vklCreateGraphicsPipeline(graphics_pipeline_config);
