@@ -205,7 +205,7 @@ struct VkDetailedImage
     VkExtent2D extent;
 };
 
-VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, VkSurfaceFormatKHR vkSurfaceImageFormat, GLFWwindow *window, uint32_t queueFamily, std::vector<VkDetailedImage> &images)
+VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkDevice, VkSurfaceKHR vkSurface, VkSurfaceFormatKHR vkSurfaceImageFormat, GLFWwindow *window, uint32_t queueFamily, std::vector<VkDetailedImage> &colorAttachments, VkDetailedImage *depthAttachment)
 {
     std::vector<uint32_t> queueFamilyIndices({queueFamily});
     VkSurfaceCapabilitiesKHR surfaceCapabilities = getPhysicalDeviceSurfaceCapabilities(vkPhysicalDevice, vkSurface);
@@ -254,10 +254,10 @@ VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkD
         VKL_LOG("Swapchain image count does NOT match! " << std::to_string(swapchainImageCount) << " != " << std::to_string(surfaceCapabilities.minImageCount));
     }
 
-    images.reserve(swapchainImages.size());
+    colorAttachments.reserve(swapchainImages.size());
     for (const auto &image : swapchainImages)
     {
-        images.push_back({
+        colorAttachments.push_back({
             .image = image,
             .format = swapchainCreateInfo.imageFormat,
             .colorSpace = swapchainCreateInfo.imageColorSpace,
@@ -265,22 +265,34 @@ VkSwapchainKHR createVkSwapchain(VkPhysicalDevice vkPhysicalDevice, VkDevice vkD
         });
     }
 
+    VkImage depthAttachmentImage = vklCreateDeviceLocalImageWithBackingMemory(vkPhysicalDevice, vkDevice, viewportWidth, viewportHeight, VK_FORMAT_D32_SFLOAT, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+    *depthAttachment = {
+        .image = depthAttachmentImage,
+        .format = VK_FORMAT_D32_SFLOAT,
+        .extent = {(uint32_t)viewportWidth, (uint32_t)viewportHeight},
+    };
+
     return vkSwapchain;
 }
 
-VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vector<VkDetailedImage> &images)
+VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vector<VkDetailedImage> &colorAttachments, VkDetailedImage &depthAttachment)
 {
     std::vector<VklSwapchainFramebufferComposition> swapchainImageCompositions;
-    for (size_t i = 0; i < images.size(); i++)
+    for (size_t i = 0; i < colorAttachments.size(); i++)
     {
         VklSwapchainFramebufferComposition composition = {
             .colorAttachmentImageDetails = {
-                .imageHandle = images[i].image,
-                .imageFormat = images[i].format,
+                .imageHandle = colorAttachments[i].image,
+                .imageFormat = colorAttachments[i].format,
                 .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                 .clearValue = {0.8, 1.0, 1.0, 1.0},
             },
-            .depthAttachmentImageDetails = {},
+            .depthAttachmentImageDetails = {
+                .imageHandle = depthAttachment.image,
+                .imageFormat = depthAttachment.format,
+                .imageUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                .clearValue = {.depthStencil = {1.0f, 0}},
+            },
         };
         swapchainImageCompositions.push_back(composition);
     }
@@ -288,7 +300,7 @@ VklSwapchainConfig createVklSwapchainConfig(VkSwapchainKHR vkSwapchain, std::vec
     // Gather swapchain config as required by the framework:
     return {
         .swapchainHandle = vkSwapchain,
-        .imageExtent = images[0].extent,
+        .imageExtent = colorAttachments[0].extent,
         .swapchainImages = swapchainImageCompositions,
     };
 }
@@ -570,9 +582,10 @@ int main(int argc, char **argv)
     VkDevice vk_device = createVkDevice(vk_physical_device, graphics_queue_family);
     VkQueue vk_queue = VK_NULL_HANDLE;
     vkGetDeviceQueue(vk_device, graphics_queue_family, 0, &vk_queue);
-    std::vector<VkDetailedImage> swapchain_images;
+    std::vector<VkDetailedImage> swapchain_color_attachments;
+    VkDetailedImage swapchain_depth_attachment = {};
     VkSurfaceFormatKHR vk_surface_image_format = getSurfaceImageFormat(vk_physical_device, vk_surface);
-    VkSwapchainKHR vk_swapchain = createVkSwapchain(vk_physical_device, vk_device, vk_surface, vk_surface_image_format, window, graphics_queue_family, swapchain_images);
+    VkSwapchainKHR vk_swapchain = createVkSwapchain(vk_physical_device, vk_device, vk_surface, vk_surface_image_format, window, graphics_queue_family, swapchain_color_attachments, &swapchain_depth_attachment);
 
 #pragma region check_instances
     if (!vk_instance)
@@ -602,7 +615,7 @@ int main(int argc, char **argv)
 #pragma endregion
 
     // Gather swapchain config as required by the framework:
-    VklSwapchainConfig swapchain_config = createVklSwapchainConfig(vk_swapchain, swapchain_images);
+    VklSwapchainConfig swapchain_config = createVklSwapchainConfig(vk_swapchain, swapchain_color_attachments, swapchain_depth_attachment);
 
     // Init the framework:
     if (!gcgInitFramework(vk_instance, vk_surface, vk_physical_device, vk_device, vk_queue, swapchain_config))
@@ -737,7 +750,7 @@ int main(int argc, char **argv)
             }
             int width, height;
             glfwGetFramebufferSize(window, &width, &height);
-            gcgSaveScreenshot(screenshot_filename, swapchain_images[idx].image, width,
+            gcgSaveScreenshot(screenshot_filename, swapchain_color_attachments[idx].image, width,
                               height, vk_surface_image_format.format, vk_device, vk_physical_device, vk_queue,
                               graphics_queue_family);
             break;
@@ -749,6 +762,7 @@ int main(int argc, char **argv)
 
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
+    vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_1);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_2);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
