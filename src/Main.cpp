@@ -12,6 +12,9 @@
 #include <vulkan/vk_enum_string_helper.h>
 
 #include <vector>
+#include <functional>
+#include <algorithm>
+#include <iterator>
 
 #undef min
 #undef max
@@ -382,6 +385,7 @@ public:
     float nearPlane;
     float farPlane;
     glm::vec3 position;
+    // pitch, yaw, roll
     glm::vec3 angles;
     glm::mat4 viewMatrix;
     glm::mat4 projectionMatrix;
@@ -409,11 +413,10 @@ public:
     void updateView()
     {
         viewMatrix = glm::mat4(1.0f);
-        viewMatrix = glm::translate(viewMatrix, position);
         viewMatrix = glm::rotate(viewMatrix, angles.x, {1, 0, 0});
         viewMatrix = glm::rotate(viewMatrix, angles.y, {0, 1, 0});
         viewMatrix = glm::rotate(viewMatrix, angles.z, {0, 0, 1});
-        viewMatrix = glm::inverse(viewMatrix);
+        viewMatrix = glm::translate(viewMatrix, -1.0f * position);
         viewProjectionMatrix = projectionMatrix * viewMatrix;
     }
 };
@@ -432,6 +435,98 @@ std::unique_ptr<Camera> createCamera(std::string init_path, GLFWwindow *window)
     return std::make_unique<Camera>(glm::radians(fovDeg), glm::vec2(viewportWidth, viewportHeight), nearPlane, farPlane, glm::vec3(), glm::vec3(pitch, yaw, 0));
 }
 
+class Input
+{
+private:
+    static Input *_instance;
+
+    float _prevTime;
+    float _time;
+    float _timeDelta;
+    glm::vec2 _mousePrevPos;
+    glm::vec2 _mousePos;
+    glm::vec2 _mouseDelta;
+    glm::vec2 _scrollDelta;
+    glm::vec2 _scrollNextDelta;
+    bool _mousePrevButtons[GLFW_MOUSE_BUTTON_LAST];
+    bool _mouseButtons[GLFW_MOUSE_BUTTON_LAST];
+
+public:
+    const glm::vec2 mousePos() { return _mousePos; }
+    const glm::vec2 mouseDelta() { return _mouseDelta; }
+    const glm::vec2 scrollDelta() { return _scrollDelta; }
+    const glm::vec2 timeDelta() { return _mouseDelta; }
+    const bool isMouseDown(int button)
+    {
+        return _mouseButtons[button];
+    }
+
+    const bool isMouseTap(int button)
+    {
+        return _mouseButtons[button] && !_mousePrevButtons[button];
+    }
+
+    void update()
+    {
+        _time = glfwGetTime();
+        _timeDelta = _time - _prevTime;
+        _mouseDelta = _mousePos - _mousePrevPos;
+        _mousePrevPos = _mousePos;
+        _scrollDelta = _scrollNextDelta;
+        std::copy(std::begin(_mouseButtons), std::end(_mouseButtons), std::begin(_mousePrevButtons));
+    }
+
+    void onKey(GLFWwindow *window, int key, int scancode, int action, int mods)
+    {
+        if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
+        {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+    }
+
+    void onCursorPos(GLFWwindow *window, double x, double y)
+    {
+        _mousePos.x = x;
+        _mousePos.y = y;
+    }
+
+    void onMouseButton(GLFWwindow *window, int button, int action, int mods)
+    {
+        _mouseButtons[button] = action != GLFW_RELEASE;
+    }
+
+    void onScroll(GLFWwindow *window, double dx, double dy)
+    {
+        _scrollNextDelta.x += dx;
+        _scrollNextDelta.y += dy;
+    }
+
+    static Input *instance();
+    static Input *init(GLFWwindow *window);
+};
+
+Input *Input::_instance = nullptr;
+
+Input *Input::instance()
+{
+
+    return Input::_instance;
+}
+
+Input *Input::init(GLFWwindow *window)
+{
+    Input::_instance = new Input();
+    glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods)
+                       { Input::_instance->onKey(window, key, scancode, action, mods); });
+    glfwSetCursorPosCallback(window, [](GLFWwindow *window, double x, double y)
+                             { Input::_instance->onCursorPos(window, x, y); });
+    glfwSetMouseButtonCallback(window, [](GLFWwindow *window, int button, int action, int mods)
+                               { Input::_instance->onMouseButton(window, button, action, mods); });
+    glfwSetScrollCallback(window, [](GLFWwindow *window, double dx, double dy)
+                          { Input::_instance->onScroll(window, dx, dy); });
+    return Input::_instance;
+}
+
 #pragma endregion
 
 struct Vertex
@@ -439,10 +534,15 @@ struct Vertex
     glm::vec3 position;
 };
 
-struct CombinedUniformBlock
+struct ModelUniformBlock
 {
     glm::vec4 color;
-    glm::mat4 modelViewProjectionMatrix;
+    glm::mat4 modelMatrix;
+};
+
+struct CameraUniformBlock
+{
+    glm::mat4 viewProjectionMatrix;
 };
 
 /* --------------------------------------------- */
@@ -518,6 +618,10 @@ int main(int argc, char **argv)
     auto camera = createCamera(init_camera_filepath, window);
     camera->position = glm::vec3(camera->viewMatrix * glm::vec4(0, 0, 5, 1));
     camera->updateView();
+    Input *input = Input::init(window);
+    // azimuth & elevation
+    glm::vec2 cameraDirection = glm::vec2(glm::atan(camera->position.x, camera->position.z), glm::asin(camera->position.y));
+    float cameraDistance = glm::length(camera->position);
 
     VklGraphicsPipelineConfig graphics_pipeline_config = {
         .vertexShaderPath = "assets/shaders_vk/task2.vert",
@@ -535,12 +639,19 @@ int main(int argc, char **argv)
         }},
         .polygonDrawMode = VK_POLYGON_MODE_FILL,
         .triangleCullingMode = VK_CULL_MODE_NONE,
-        .descriptorLayout = {{
-            .binding = 0,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_ALL,
-        }},
+        .descriptorLayout = {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_ALL,
+            },
+            {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_ALL,
+            }},
     };
     VkPipeline vk_pipeline = vklCreateGraphicsPipeline(graphics_pipeline_config);
     glm::mat4 model_matrix_1 = glm::mat4(1.0);
@@ -549,42 +660,65 @@ int main(int argc, char **argv)
     glm::mat4 model_matrix_2 = glm::mat4(1.0);
     model_matrix_2 = glm::translate(model_matrix_2, {1.5, -1, 0});
     model_matrix_2 = glm::scale(model_matrix_2, {1, 2, 1});
-    CombinedUniformBlock uniform_data_1 = {
+    ModelUniformBlock uniform_data_1 = {
         .color = {0.2, 0.6, 0.4, 1.0},
-        .modelViewProjectionMatrix = camera->viewProjectionMatrix * model_matrix_1,
+        .modelMatrix = model_matrix_1,
     };
-    CombinedUniformBlock uniform_data_2 = {
+    ModelUniformBlock uniform_data_2 = {
         .color = {0.7, 0.1, 0.2, 1.0},
-        .modelViewProjectionMatrix = camera->viewProjectionMatrix * model_matrix_2,
+        .modelMatrix = model_matrix_2,
     };
-    VkBuffer uniform_buffer_1 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CombinedUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    VkBuffer uniform_buffer_2 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CombinedUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_1, &uniform_data_1, sizeof(CombinedUniformBlock));
-    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_2, &uniform_data_2, sizeof(CombinedUniformBlock));
+    VkBuffer uniform_buffer_1 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(ModelUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    VkBuffer uniform_buffer_2 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(ModelUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    VkBuffer uniform_buffer_3 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CameraUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_1, &uniform_data_1, sizeof(ModelUniformBlock));
+    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_2, &uniform_data_2, sizeof(ModelUniformBlock));
 
     VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 8, 16);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
         vk_device,
         {{
-            .binding = 0,
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        }});
+             .binding = 0,
+             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+         },
+         {
+             .binding = 1,
+             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+         }});
 
     VkDescriptorSet vk_descriptor_set_1 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
     VkDescriptorSet vk_descriptor_set_2 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
-    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_1, 0, uniform_buffer_1, sizeof(CombinedUniformBlock));
-    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 0, uniform_buffer_2, sizeof(CombinedUniformBlock));
+    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_1, 0, uniform_buffer_1, sizeof(ModelUniformBlock));
+    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_1, 1, uniform_buffer_3, sizeof(CameraUniformBlock));
+    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 0, uniform_buffer_2, sizeof(ModelUniformBlock));
+    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 1, uniform_buffer_3, sizeof(CameraUniformBlock));
 
-    glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods)
-                       {
-        if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        } });
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
+        input->update();
+
+        if (input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT))
+        {
+            auto delta = input->mouseDelta();
+            cameraDirection.x -= delta.x / 200.0f;
+            cameraDirection.y += delta.y / 200.0f;
+            camera->position = glm::vec3(
+                glm::sin(cameraDirection.x) * glm::cos(cameraDirection.y),
+                glm::sin(cameraDirection.y),
+                glm::cos(cameraDirection.x) * glm::cos(cameraDirection.y));
+            camera->position *= cameraDistance;
+            camera->angles.x = 1.0f * cameraDirection.y;
+            camera->angles.y = -1.0f * cameraDirection.x;
+            camera->updateView();
+        }
+
+        CameraUniformBlock camera_uniform_data = {
+            .viewProjectionMatrix = camera->viewProjectionMatrix,
+        };
+        vklCopyDataIntoHostCoherentBuffer(uniform_buffer_3, &camera_uniform_data, sizeof(CameraUniformBlock));
 
         vklWaitForNextSwapchainImage();
         vklStartRecordingCommands();
@@ -617,6 +751,7 @@ int main(int argc, char **argv)
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_1);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_2);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
     vklDestroyGraphicsPipeline(vk_pipeline);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
