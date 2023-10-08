@@ -485,6 +485,7 @@ public:
         _mouseDelta = _mousePos - _mousePrevPos;
         _mousePrevPos = _mousePos;
         _scrollDelta = _scrollNextDelta;
+        _scrollNextDelta = glm::vec2(0.0f);
         std::copy(std::begin(_mouseButtons), std::end(_mouseButtons), std::begin(_mousePrevButtons));
     }
 
@@ -713,20 +714,26 @@ int main(int argc, char **argv)
         glfwPollEvents();
         input->update();
 
+        cameraDistance -= input->scrollDelta().y / 5.0f;
+        cameraDistance = glm::clamp(cameraDistance, 0.1f, 100.0f);
+
         if (input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT))
         {
             auto delta = input->mouseDelta();
             cameraDirection.x -= delta.x / 200.0f;
+            cameraDirection.x = glm::mod(glm::mod(cameraDirection.x, glm::two_pi<float>()) + glm::two_pi<float>(), glm::two_pi<float>());
             cameraDirection.y += delta.y / 200.0f;
-            camera->position = glm::vec3(
-                glm::sin(cameraDirection.x) * glm::cos(cameraDirection.y),
-                glm::sin(cameraDirection.y),
-                glm::cos(cameraDirection.x) * glm::cos(cameraDirection.y));
-            camera->position *= cameraDistance;
-            camera->angles.x = 1.0f * cameraDirection.y;
-            camera->angles.y = -1.0f * cameraDirection.x;
-            camera->updateView();
+            cameraDirection.y = glm::clamp(cameraDirection.y, -glm::half_pi<float>(), glm::half_pi<float>());
         }
+
+        camera->position = glm::vec3(
+            glm::sin(cameraDirection.x) * glm::cos(cameraDirection.y),
+            glm::sin(cameraDirection.y),
+            glm::cos(cameraDirection.x) * glm::cos(cameraDirection.y));
+        camera->position *= cameraDistance;
+        camera->angles.x = 1.0f * cameraDirection.y;
+        camera->angles.y = -1.0f * cameraDirection.x;
+        camera->updateView();
 
         CameraUniformBlock camera_uniform_data = {
             .viewProjectionMatrix = camera->viewProjectionMatrix,
