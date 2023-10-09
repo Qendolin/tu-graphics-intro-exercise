@@ -634,8 +634,9 @@ int main(int argc, char **argv)
     camera->updateView();
     Input *input = Input::init(window);
     // azimuth & elevation
-    glm::vec2 cameraDirection = glm::vec2(glm::atan(camera->position.x, camera->position.z), glm::asin(camera->position.y));
-    float cameraDistance = glm::length(camera->position);
+    glm::vec2 orbitDirection = glm::vec2(glm::atan(camera->position.x, camera->position.z), glm::asin(camera->position.y));
+    float orbitDistance = glm::length(camera->position);
+    glm::vec3 orgbitCenter = glm::vec3(0.0f);
 
     VklGraphicsPipelineConfig graphics_pipeline_config = {
         .vertexShaderPath = "assets/shaders_vk/task2.vert",
@@ -714,25 +715,26 @@ int main(int argc, char **argv)
         glfwPollEvents();
         input->update();
 
-        cameraDistance -= input->scrollDelta().y / 5.0f;
-        cameraDistance = glm::clamp(cameraDistance, 0.1f, 100.0f);
+        orbitDistance -= input->scrollDelta().y / 5.0f;
+        orbitDistance = glm::clamp(orbitDistance, 0.1f, 100.0f);
 
         if (input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT))
         {
             auto delta = input->mouseDelta();
-            cameraDirection.x -= delta.x / 200.0f;
-            cameraDirection.x = glm::mod(glm::mod(cameraDirection.x, glm::two_pi<float>()) + glm::two_pi<float>(), glm::two_pi<float>());
-            cameraDirection.y += delta.y / 200.0f;
-            cameraDirection.y = glm::clamp(cameraDirection.y, -glm::half_pi<float>(), glm::half_pi<float>());
+            orbitDirection.x -= delta.x / 200.0f;
+            orbitDirection.x = glm::mod(glm::mod(orbitDirection.x, glm::two_pi<float>()) + glm::two_pi<float>(), glm::two_pi<float>());
+            orbitDirection.y += delta.y / 200.0f;
+            orbitDirection.y = glm::clamp(orbitDirection.y, -glm::half_pi<float>(), glm::half_pi<float>());
         }
 
-        camera->position = glm::vec3(
-            glm::sin(cameraDirection.x) * glm::cos(cameraDirection.y),
-            glm::sin(cameraDirection.y),
-            glm::cos(cameraDirection.x) * glm::cos(cameraDirection.y));
-        camera->position *= cameraDistance;
-        camera->angles.x = 1.0f * cameraDirection.y;
-        camera->angles.y = -1.0f * cameraDirection.x;
+        camera->position = orgbitCenter;
+        camera->position += glm::vec3(
+            glm::sin(orbitDirection.x) * glm::cos(orbitDirection.y),
+            glm::sin(orbitDirection.y),
+            glm::cos(orbitDirection.x) * glm::cos(orbitDirection.y));
+        camera->position *= orbitDistance;
+        camera->angles.x = 1.0f * orbitDirection.y;
+        camera->angles.y = -1.0f * orbitDirection.x;
         camera->updateView();
 
         CameraUniformBlock camera_uniform_data = {
