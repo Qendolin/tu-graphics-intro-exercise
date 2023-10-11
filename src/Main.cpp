@@ -625,18 +625,16 @@ int main(int argc, char **argv)
         VKL_EXIT_WITH_ERROR("Failed to init framework");
     }
 
-    std::string init_camera_filepath = "assets/settings/camera_front.ini";
+    std::string init_camera_filepath = "assets/settings/camera_front_right.ini";
     if (cmdline_args.init_camera)
     {
         init_camera_filepath = cmdline_args.init_camera_filepath;
     }
     auto camera = createCamera(init_camera_filepath, window);
-    camera->position = glm::vec3(camera->viewMatrix * glm::vec4(0, 0, 5, 1));
-    camera->updateView();
     Input *input = Input::init(window);
     // azimuth & elevation
-    glm::vec2 orbitDirection = glm::vec2(glm::atan(camera->position.x, camera->position.z), glm::asin(camera->position.y));
-    float orbitDistance = glm::length(camera->position);
+    glm::vec2 orbitDirection = glm::vec2(camera->angles.y, camera->angles.x);
+    float orbitDistance = 5.0f;
     glm::vec3 orgbitCenter = glm::vec3(0.0f);
 
     std::string vertShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/task2.vert");
