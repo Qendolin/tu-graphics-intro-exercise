@@ -633,7 +633,7 @@ int main(int argc, char **argv)
     auto camera = createCamera(init_camera_filepath, window);
     Input *input = Input::init(window);
     // azimuth & elevation
-    glm::vec2 orbitDirection = glm::vec2(camera->angles.y, camera->angles.x);
+    glm::vec2 orbitDirection = glm::vec2(-camera->angles.y, camera->angles.x);
     float orbitDistance = 5.0f;
     glm::vec3 orgbitCenter = glm::vec3(0.0f);
 
