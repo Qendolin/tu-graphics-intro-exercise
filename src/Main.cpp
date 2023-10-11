@@ -638,9 +638,11 @@ int main(int argc, char **argv)
     float orbitDistance = glm::length(camera->position);
     glm::vec3 orgbitCenter = glm::vec3(0.0f);
 
+    std::string vertShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/task2.vert");
+    std::string fragShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/task2.frag");
     VklGraphicsPipelineConfig graphics_pipeline_config = {
-        .vertexShaderPath = "assets/shaders_vk/task2.vert",
-        .fragmentShaderPath = "assets/shaders_vk/task2.frag",
+        .vertexShaderPath = vertShaderPath.c_str(),
+        .fragmentShaderPath = fragShaderPath.c_str(),
         .vertexInputBuffers = {{
             .binding = 0,
             .stride = sizeof(Vertex),
