@@ -425,10 +425,11 @@ public:
     void updateView()
     {
         viewMatrix = glm::mat4(1.0f);
-        viewMatrix = glm::rotate(viewMatrix, angles.x, {1, 0, 0});
-        viewMatrix = glm::rotate(viewMatrix, angles.y, {0, 1, 0});
+        viewMatrix = glm::translate(viewMatrix, position);
         viewMatrix = glm::rotate(viewMatrix, angles.z, {0, 0, 1});
-        viewMatrix = glm::translate(viewMatrix, -1.0f * position);
+        viewMatrix = glm::rotate(viewMatrix, angles.y, {0, 1, 0});
+        viewMatrix = glm::rotate(viewMatrix, angles.x, {1, 0, 0});
+        viewMatrix = glm::inverse(viewMatrix);
         viewProjectionMatrix = projectionMatrix * viewMatrix;
     }
 };
@@ -735,8 +736,8 @@ int main(int argc, char **argv)
             glm::sin(orbitDirection.y),
             glm::cos(orbitDirection.x) * glm::cos(orbitDirection.y));
         camera->position *= orbitDistance;
-        camera->angles.x = 1.0f * orbitDirection.y;
-        camera->angles.y = -1.0f * orbitDirection.x;
+        camera->angles.x = -1.0f * orbitDirection.y;
+        camera->angles.y = 1.0f * orbitDirection.x;
         camera->updateView();
 
         CameraUniformBlock camera_uniform_data = {
