@@ -658,7 +658,7 @@ int main(int argc, char **argv)
             .offset = 0u,
         }},
         .polygonDrawMode = VK_POLYGON_MODE_LINE,
-        .triangleCullingMode = VK_CULL_MODE_NONE,
+        .triangleCullingMode = VK_CULL_MODE_BACK_BIT,
         .descriptorLayout = {
             {
                 .binding = 0,
