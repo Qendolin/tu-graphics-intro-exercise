@@ -176,20 +176,24 @@ VkPhysicalDevice createVkPhysicalDevice(VkInstance vkInstance, VkSurfaceKHR vkSu
 
 VkDevice createVkDevice(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamily)
 {
-    float queue_priority = 1.0f;
-    const char *required_device_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-    const VkDeviceQueueCreateInfo queue_create_info = {
+    float queuePriority = 1.0f;
+    const char *requiredDeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    const VkDeviceQueueCreateInfo queueCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .queueFamilyIndex = queueFamily,
         .queueCount = 1,
-        .pQueuePriorities = &queue_priority,
+        .pQueuePriorities = &queuePriority,
+    };
+    const VkPhysicalDeviceFeatures deviceFeatures = {
+        .fillModeNonSolid = VK_TRUE,
     };
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     deviceCreateInfo.enabledExtensionCount = 1;
-    deviceCreateInfo.ppEnabledExtensionNames = &required_device_extensions;
+    deviceCreateInfo.ppEnabledExtensionNames = &requiredDeviceExtensions;
     deviceCreateInfo.queueCreateInfoCount = 1;
-    deviceCreateInfo.pQueueCreateInfos = &queue_create_info;
+    deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+    deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
     VkDevice vkDevice = VK_NULL_HANDLE;
     VkResult error = vkCreateDevice(vkPhysicalDevice, &deviceCreateInfo, nullptr, &vkDevice);
@@ -653,7 +657,7 @@ int main(int argc, char **argv)
             .format = VK_FORMAT_R32G32B32_SFLOAT,
             .offset = 0u,
         }},
-        .polygonDrawMode = VK_POLYGON_MODE_FILL,
+        .polygonDrawMode = VK_POLYGON_MODE_LINE,
         .triangleCullingMode = VK_CULL_MODE_NONE,
         .descriptorLayout = {
             {
@@ -817,8 +821,10 @@ uint32_t selectPhysicalDeviceIndex(const VkPhysicalDevice *physical_devices, uin
                 // This queue supports graphics! Let's see if it also supports presentation:
                 VkBool32 presentation_supported;
                 vkGetPhysicalDeviceSurfaceSupportKHR(physical_devices[physical_device_index], queue_family_index, surface, &presentation_supported);
+                VkPhysicalDeviceFeatures featues;
+                vkGetPhysicalDeviceFeatures(physical_devices[physical_device_index], &featues);
 
-                if (VK_TRUE == presentation_supported)
+                if (presentation_supported == VK_TRUE && featues.fillModeNonSolid == VK_TRUE)
                 {
                     // We've found a suitable physical device
                     return physical_device_index;
