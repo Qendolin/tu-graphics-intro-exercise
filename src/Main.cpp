@@ -82,6 +82,22 @@ void errorCallbackFromGlfw(int error, const char *description) { std::cout << "G
 
 #pragma endregion
 
+struct Vertex
+{
+    glm::vec3 position;
+};
+
+struct ModelUniformBlock
+{
+    glm::vec4 color;
+    glm::mat4 modelMatrix;
+};
+
+struct CameraUniformBlock
+{
+    glm::mat4 viewProjectionMatrix;
+};
+
 #pragma region hide_this_stuff
 GLFWwindow *createGLFWWindow()
 {
@@ -465,14 +481,17 @@ private:
     glm::vec2 _mouseDelta;
     glm::vec2 _scrollDelta;
     glm::vec2 _scrollNextDelta;
-    bool _mousePrevButtons[GLFW_MOUSE_BUTTON_LAST];
-    bool _mouseButtons[GLFW_MOUSE_BUTTON_LAST];
+    bool _mousePrevButtons[GLFW_MOUSE_BUTTON_LAST + 1];
+    bool _mouseButtons[GLFW_MOUSE_BUTTON_LAST + 1];
+    bool _keysPrev[GLFW_KEY_LAST + 1];
+    bool _keys[GLFW_KEY_LAST + 1];
 
 public:
     const glm::vec2 mousePos() { return _mousePos; }
     const glm::vec2 mouseDelta() { return _mouseDelta; }
     const glm::vec2 scrollDelta() { return _scrollDelta; }
     const glm::vec2 timeDelta() { return _mouseDelta; }
+
     const bool isMouseDown(int button)
     {
         return _mouseButtons[button];
@@ -481,6 +500,16 @@ public:
     const bool isMouseTap(int button)
     {
         return _mouseButtons[button] && !_mousePrevButtons[button];
+    }
+
+    const bool isKeyDown(int key)
+    {
+        return _keys[key];
+    }
+
+    const bool isKeyTap(int key)
+    {
+        return _keys[key] && !_keysPrev[key];
     }
 
     void update()
@@ -492,14 +521,12 @@ public:
         _scrollDelta = _scrollNextDelta;
         _scrollNextDelta = glm::vec2(0.0f);
         std::copy(std::begin(_mouseButtons), std::end(_mouseButtons), std::begin(_mousePrevButtons));
+        std::copy(std::begin(_keys), std::end(_keys), std::begin(_keysPrev));
     }
 
     void onKey(GLFWwindow *window, int key, int scancode, int action, int mods)
     {
-        if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
-        {
-            glfwSetWindowShouldClose(window, GLFW_TRUE);
-        }
+        _keys[key] = action != GLFW_RELEASE;
     }
 
     void onCursorPos(GLFWwindow *window, double x, double y)
@@ -545,23 +572,77 @@ Input *Input::init(GLFWwindow *window)
     return Input::_instance;
 }
 
+struct PipelineParams
+{
+    std::string vertexShaderPath;
+    std::string fragmentShaderPath;
+    VkPolygonMode polygonMode;
+    VkCullModeFlags cullingMode;
+};
+
+VkPipeline createVkPipeline(PipelineParams &params)
+{
+    VklGraphicsPipelineConfig graphics_pipeline_config = {
+        .vertexShaderPath = params.vertexShaderPath.c_str(),
+        .fragmentShaderPath = params.fragmentShaderPath.c_str(),
+        .vertexInputBuffers = {{
+            .binding = 0,
+            .stride = sizeof(Vertex),
+            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+        }},
+        .inputAttributeDescriptions = {{
+            .location = 0,
+            .binding = 0,
+            .format = VK_FORMAT_R32G32B32_SFLOAT,
+            .offset = 0u,
+        }},
+        .polygonDrawMode = params.polygonMode,
+        .triangleCullingMode = params.cullingMode,
+        .descriptorLayout = {
+            {
+                .binding = 0,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_ALL,
+            },
+            {
+                .binding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_ALL,
+            }},
+    };
+    return vklCreateGraphicsPipeline(graphics_pipeline_config);
+}
+
+std::vector<std::vector<VkPipeline>> createVkPipelineMatrix(PipelineParams &params, std::vector<VkPolygonMode> &polygonModes, std::vector<VkCullModeFlags> &cullingModes)
+{
+    auto m = std::vector<std::vector<VkPipeline>>(polygonModes.size());
+    for (int i = 0; i < polygonModes.size(); i++)
+    {
+        m[i] = std::vector<VkPipeline>(cullingModes.size());
+        for (int j = 0; j < cullingModes.size(); j++)
+        {
+            params.polygonMode = polygonModes[i];
+            params.cullingMode = cullingModes[j];
+            m[i][j] = createVkPipeline(params);
+        }
+    }
+    return m;
+}
+
+void destroyVkPipelineMatrix(std::vector<std::vector<VkPipeline>> matrix)
+{
+    for (auto &&row : matrix)
+    {
+        for (auto &&entry : row)
+        {
+            vklDestroyGraphicsPipeline(entry);
+        }
+    }
+}
+
 #pragma endregion
-
-struct Vertex
-{
-    glm::vec3 position;
-};
-
-struct ModelUniformBlock
-{
-    glm::vec4 color;
-    glm::mat4 modelMatrix;
-};
-
-struct CameraUniformBlock
-{
-    glm::mat4 viewProjectionMatrix;
-};
 
 /* --------------------------------------------- */
 // Main
@@ -643,37 +724,39 @@ int main(int argc, char **argv)
 
     std::string vertShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/task2.vert");
     std::string fragShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/task2.frag");
-    VklGraphicsPipelineConfig graphics_pipeline_config = {
-        .vertexShaderPath = vertShaderPath.c_str(),
-        .fragmentShaderPath = fragShaderPath.c_str(),
-        .vertexInputBuffers = {{
-            .binding = 0,
-            .stride = sizeof(Vertex),
-            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-        }},
-        .inputAttributeDescriptions = {{
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = 0u,
-        }},
-        .polygonDrawMode = VK_POLYGON_MODE_LINE,
-        .triangleCullingMode = VK_CULL_MODE_BACK_BIT,
-        .descriptorLayout = {
-            {
-                .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_ALL,
-            },
-            {
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_ALL,
-            }},
+    PipelineParams pipelineParams = {
+        .vertexShaderPath = vertShaderPath,
+        .fragmentShaderPath = fragShaderPath,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullingMode = VK_CULL_MODE_NONE,
     };
-    VkPipeline vk_pipeline = vklCreateGraphicsPipeline(graphics_pipeline_config);
+
+    std::vector<VkPolygonMode> vk_polygon_modes = std::vector<VkPolygonMode>({
+        VK_POLYGON_MODE_FILL,
+        VK_POLYGON_MODE_LINE,
+    });
+    int selected_polygon_mode = 0;
+    std::vector<VkCullModeFlags> vk_culling_modes = std::vector<VkCullModeFlags>({
+        VK_CULL_MODE_NONE,
+        VK_CULL_MODE_BACK_BIT,
+        VK_CULL_MODE_FRONT_BIT,
+    });
+    int selected_culling_mode = 0;
+    auto vk_pipeline_matrix = createVkPipelineMatrix(pipelineParams, vk_polygon_modes, vk_culling_modes);
+
+    std::string init_renderer_filepath = "assets/settings/renderer_standard.ini";
+    if (cmdline_args.init_renderer)
+    {
+        init_renderer_filepath = cmdline_args.init_renderer_filepath;
+    }
+    INIReader renderer_reader(init_renderer_filepath);
+    bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
+    if (as_wireframe)
+        selected_polygon_mode = 1;
+    bool with_backface_culling = renderer_reader.GetBoolean("renderer", "backface_culling", false);
+    if (with_backface_culling)
+        selected_culling_mode = 1;
+
     glm::mat4 model_matrix_1 = glm::mat4(1.0);
     model_matrix_1 = glm::translate(model_matrix_1, {-1.5, 1, 0});
     model_matrix_1 = glm::rotate(model_matrix_1, glm::radians(180.0f), {0, 1, 0});
@@ -717,8 +800,26 @@ int main(int argc, char **argv)
 
     while (!glfwWindowShouldClose(window))
     {
-        glfwPollEvents();
         input->update();
+        glfwPollEvents();
+
+        if (input->isKeyTap(GLFW_KEY_ESCAPE))
+        {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+
+        if (input->isKeyTap(GLFW_KEY_F1))
+        {
+            selected_polygon_mode++;
+            selected_polygon_mode %= vk_polygon_modes.size();
+        }
+
+        if (input->isKeyTap(GLFW_KEY_F2))
+        {
+            selected_culling_mode++;
+            selected_culling_mode %= vk_culling_modes.size();
+        }
+        VkPipeline vk_selected_pipeline = vk_pipeline_matrix[selected_polygon_mode][selected_culling_mode];
 
         orbitDistance -= input->scrollDelta().y / 5.0f;
         orbitDistance = glm::clamp(orbitDistance, 0.1f, 100.0f);
@@ -749,8 +850,8 @@ int main(int argc, char **argv)
 
         vklWaitForNextSwapchainImage();
         vklStartRecordingCommands();
-        gcgDrawTeapot(vk_pipeline, vk_descriptor_set_1);
-        gcgDrawTeapot(vk_pipeline, vk_descriptor_set_2);
+        gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_1);
+        gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_2);
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
 
@@ -780,7 +881,7 @@ int main(int argc, char **argv)
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_1);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_2);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
-    vklDestroyGraphicsPipeline(vk_pipeline);
+    destroyVkPipelineMatrix(vk_pipeline_matrix);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
     vkDestroyDevice(vk_device, nullptr);
