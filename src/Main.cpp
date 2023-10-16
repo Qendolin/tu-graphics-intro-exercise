@@ -98,6 +98,61 @@ struct CameraUniformBlock
     glm::mat4 viewProjectionMatrix;
 };
 
+uint32_t cube_indices[]{
+    // Top
+    2, 6, 7,
+    2, 3, 7,
+
+    // Bottom
+    0, 4, 5,
+    0, 1, 5,
+
+    // Left
+    0, 2, 6,
+    0, 4, 6,
+
+    // Right
+    1, 3, 7,
+    1, 5, 7,
+
+    // Front
+    0, 2, 3,
+    0, 1, 3,
+
+    // Back
+    4, 6, 7,
+    4, 5, 7};
+
+std::vector<Vertex> createCubeVertices(float width, float height, float depth)
+{
+    auto positions = std::vector<glm::vec3>{
+        {-0.5, -0.5, 0.5},  // 0
+        {0.5, -0.5, 0.5},   // 1
+        {-0.5, 0.5, 0.5},   // 2
+        {0.5, 0.5, 0.5},    // 3
+        {-0.5, -0.5, -0.5}, // 4
+        {0.5, -0.5, -0.5},  // 5
+        {-0.5, 0.5, -0.5},  // 6
+        {0.5, 0.5, -0.5},   // 7
+    };
+
+    auto scale = glm::mat4(1.0);
+    scale = glm::scale(scale, {width, height, depth});
+
+    for (size_t i = 0; i < positions.size(); i++)
+    {
+        positions[i] = glm::vec3(scale * glm::vec4(positions[i], 1.0f));
+    }
+
+    auto vertices = std::vector<Vertex>(positions.size());
+    for (size_t i = 0; i < vertices.size(); i++)
+    {
+        vertices[i] = {positions[i]};
+    }
+
+    return vertices;
+}
+
 #pragma region hide_this_stuff
 GLFWwindow *createGLFWWindow()
 {
@@ -796,6 +851,12 @@ int main(int argc, char **argv)
     writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 0, uniform_buffer_2, sizeof(ModelUniformBlock));
     writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 1, uniform_buffer_3, sizeof(CameraUniformBlock));
 
+    auto cube_vertices = createCubeVertices(1, 1, 1);
+    VkBuffer cube_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cube_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(cube_vertices_buffer, &cube_vertices.front(), cube_vertices.size() * sizeof(Vertex));
+    VkBuffer cube_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cube_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(cube_indices_buffer, &cube_indices[0], sizeof(cube_indices));
+
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
     while (!glfwWindowShouldClose(window))
@@ -849,9 +910,22 @@ int main(int argc, char **argv)
         vklCopyDataIntoHostCoherentBuffer(uniform_buffer_3, &camera_uniform_data, sizeof(CameraUniformBlock));
 
         vklWaitForNextSwapchainImage();
+
         vklStartRecordingCommands();
-        gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_1);
-        gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_2);
+        VkCommandBuffer vk_cmd_buffer = vklGetCurrentCommandBuffer();
+        VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
+        vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_1, 0, nullptr);
+        vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
+        // VkBuffer teapotPositionBuffer = gcgGetTeapotPositionsBuffer();
+        VkDeviceSize vk_vertex_offset = 0;
+        vkCmdBindVertexBuffers(vk_cmd_buffer, 0, 1, &cube_vertices_buffer, &vk_vertex_offset);
+        // VkBuffer teapotIndicesBuffer = gcgGetTeapotIndicesBuffer();
+        vkCmdBindIndexBuffer(vk_cmd_buffer, cube_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+        vkCmdDrawIndexed(vk_cmd_buffer, std::size(cube_indices), 1, 0, 0, 0);
+
+        // gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_1);
+        // gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_2);
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
 
@@ -874,13 +948,14 @@ int main(int argc, char **argv)
 
     // Wait for all GPU work to finish before cleaning up:
     vkDeviceWaitIdle(vk_device);
-
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_1);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_2);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_vertices_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_indices_buffer);
     destroyVkPipelineMatrix(vk_pipeline_matrix);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
