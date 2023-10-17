@@ -100,28 +100,28 @@ struct CameraUniformBlock
 
 uint32_t cube_indices[]{
     // Top
-    2, 6, 7,
+    7, 6, 2,
     2, 3, 7,
 
     // Bottom
     0, 4, 5,
-    0, 1, 5,
+    5, 1, 0,
 
     // Left
     0, 2, 6,
-    0, 4, 6,
+    6, 4, 0,
 
     // Right
-    1, 3, 7,
+    7, 3, 1,
     1, 5, 7,
 
     // Front
-    0, 2, 3,
+    3, 2, 0,
     0, 1, 3,
 
     // Back
     4, 6, 7,
-    4, 5, 7};
+    7, 5, 4};
 
 std::vector<Vertex> createCubeVertices(float width, float height, float depth)
 {
@@ -813,8 +813,8 @@ int main(int argc, char **argv)
         selected_culling_mode = 1;
 
     glm::mat4 model_matrix_1 = glm::mat4(1.0);
-    model_matrix_1 = glm::translate(model_matrix_1, {-1.5, 1, 0});
-    model_matrix_1 = glm::rotate(model_matrix_1, glm::radians(180.0f), {0, 1, 0});
+    model_matrix_1 = glm::translate(model_matrix_1, {0, 0, 0});
+    model_matrix_1 = glm::rotate(model_matrix_1, glm::radians(0.0f), {0, 1, 0});
     glm::mat4 model_matrix_2 = glm::mat4(1.0);
     model_matrix_2 = glm::translate(model_matrix_2, {1.5, -1, 0});
     model_matrix_2 = glm::scale(model_matrix_2, {1, 2, 1});
