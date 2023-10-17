@@ -123,6 +123,27 @@ uint32_t cube_indices[]{
     4, 6, 7,
     7, 5, 4};
 
+uint32_t cornell_indices[]{
+    // Top
+    2, 6, 7,
+    7, 3, 2,
+
+    // Bottom
+    5, 4, 0,
+    0, 1, 5,
+
+    // Left
+    6, 2, 0,
+    0, 4, 6,
+
+    // Right
+    1, 3, 7,
+    7, 5, 1,
+
+    // Back
+    7, 6, 4,
+    4, 5, 7};
+
 std::vector<Vertex> createCubeVertices(float width, float height, float depth)
 {
     auto positions = std::vector<glm::vec3>{
@@ -854,8 +875,8 @@ int main(int argc, char **argv)
     auto cube_vertices = createCubeVertices(1, 1, 1);
     VkBuffer cube_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cube_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(cube_vertices_buffer, &cube_vertices.front(), cube_vertices.size() * sizeof(Vertex));
-    VkBuffer cube_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cube_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(cube_indices_buffer, &cube_indices[0], sizeof(cube_indices));
+    VkBuffer cube_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cornell_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(cube_indices_buffer, &cornell_indices[0], sizeof(cornell_indices));
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
@@ -922,7 +943,7 @@ int main(int argc, char **argv)
         // VkBuffer teapotIndicesBuffer = gcgGetTeapotIndicesBuffer();
         vkCmdBindIndexBuffer(vk_cmd_buffer, cube_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdDrawIndexed(vk_cmd_buffer, std::size(cube_indices), 1, 0, 0, 0);
+        vkCmdDrawIndexed(vk_cmd_buffer, std::size(cornell_indices), 1, 0, 0, 0);
 
         // gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_1);
         // gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_2);
