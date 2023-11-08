@@ -547,7 +547,7 @@ std::unique_ptr<Camera> createCamera(std::string init_path, GLFWwindow *window)
 class Input
 {
 private:
-    static Input *_instance;
+    static std::shared_ptr<Input> _instance;
 
     float _prevTime;
     float _time;
@@ -622,21 +622,20 @@ public:
         _scrollNextDelta.y += dy;
     }
 
-    static Input *instance();
-    static Input *init(GLFWwindow *window);
+    static std::shared_ptr<Input> instance();
+    static std::shared_ptr<Input> init(GLFWwindow *window);
 };
 
-Input *Input::_instance = nullptr;
+std::shared_ptr<Input> Input::_instance = nullptr;
 
-Input *Input::instance()
+std::shared_ptr<Input> Input::instance()
 {
-
     return Input::_instance;
 }
 
-Input *Input::init(GLFWwindow *window)
+std::shared_ptr<Input> Input::init(GLFWwindow *window)
 {
-    Input::_instance = new Input();
+    Input::_instance = std::shared_ptr<Input>(new Input());
     glfwSetKeyCallback(window, [](GLFWwindow *window, int key, int scancode, int action, int mods)
                        { Input::_instance->onKey(window, key, scancode, action, mods); });
     glfwSetCursorPosCallback(window, [](GLFWwindow *window, double x, double y)
@@ -718,6 +717,128 @@ void destroyVkPipelineMatrix(std::vector<std::vector<VkPipeline>> matrix)
     }
 }
 
+class OrbitControls
+{
+private:
+    float azimuth = 0.0f;
+    float elevation = 0.0f;
+    float distance = 5.0f;
+    glm::vec3 center = glm::vec3(0.0f);
+    std::shared_ptr<Camera> camera = nullptr;
+
+public:
+    OrbitControls(std::shared_ptr<Camera> camera)
+    {
+        azimuth = -camera->angles.y;
+        elevation = camera->angles.x;
+        this->camera = camera;
+    }
+
+    void update()
+    {
+        auto input = Input::instance();
+        distance -= input->scrollDelta().y / 5.0f;
+        distance = glm::clamp(distance, 0.1f, 100.0f);
+
+        if (input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT))
+        {
+            auto delta = input->mouseDelta();
+            azimuth -= delta.x / 200.0f;
+            azimuth = glm::mod(glm::mod(azimuth, glm::two_pi<float>()) + glm::two_pi<float>(), glm::two_pi<float>());
+            elevation += delta.y / 200.0f;
+            elevation = glm::clamp(elevation, -glm::half_pi<float>(), glm::half_pi<float>());
+        }
+
+        camera->position = center;
+        camera->position += glm::vec3(
+            glm::sin(azimuth) * glm::cos(elevation),
+            glm::sin(elevation),
+            glm::cos(azimuth) * glm::cos(elevation));
+        camera->position *= distance;
+        camera->angles.x = -1.0f * elevation;
+        camera->angles.y = 1.0f * azimuth;
+        camera->updateView();
+    }
+};
+
+class PipelineMatrixManager
+{
+private:
+    std::vector<VkPolygonMode> polygon_modes = std::vector<VkPolygonMode>({
+        VK_POLYGON_MODE_FILL,
+        VK_POLYGON_MODE_LINE,
+    });
+    std::vector<VkCullModeFlags> culling_modes = std::vector<VkCullModeFlags>({
+        VK_CULL_MODE_NONE,
+        VK_CULL_MODE_BACK_BIT,
+        VK_CULL_MODE_FRONT_BIT,
+    });
+    int polygon_mode = 0;
+    int culling_mode = 0;
+    std::vector<std::vector<VkPipeline>> matrix;
+
+public:
+    PipelineMatrixManager(std::string vshName, std::string fshName)
+    {
+        std::string vertShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/" + vshName);
+        std::string fragShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/" + fshName);
+        PipelineParams pipelineParams = {
+            .vertexShaderPath = vertShaderPath,
+            .fragmentShaderPath = fragShaderPath,
+            .polygonMode = VK_POLYGON_MODE_FILL,
+            .cullingMode = VK_CULL_MODE_NONE,
+        };
+
+        matrix = createVkPipelineMatrix(pipelineParams, polygon_modes, culling_modes);
+    }
+
+    void destory()
+    {
+        destroyVkPipelineMatrix(matrix);
+    }
+
+    void set_polygon_mode(int mode)
+    {
+        polygon_mode = (mode + polygon_modes.size()) % polygon_modes.size();
+    }
+
+    void set_culling_mode(int mode)
+    {
+        culling_mode = (mode + culling_modes.size()) % culling_modes.size();
+    }
+
+    void update()
+    {
+        auto input = Input::instance();
+
+        if (input->isKeyTap(GLFW_KEY_F1))
+            set_polygon_mode(polygon_mode + 1);
+
+        if (input->isKeyTap(GLFW_KEY_F2))
+            set_culling_mode(culling_mode + 1);
+    }
+
+    VkPipeline selected()
+    {
+        return matrix[polygon_mode][culling_mode];
+    }
+};
+
+std::unique_ptr<PipelineMatrixManager> createPipelineManager(std::string init_renderer_filepath)
+{
+    auto manager = std::make_unique<PipelineMatrixManager>("task2.vert", "task2.frag");
+
+    INIReader renderer_reader(init_renderer_filepath);
+    bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
+    if (as_wireframe)
+        manager->set_polygon_mode(1);
+    bool with_backface_culling = renderer_reader.GetBoolean("renderer", "backface_culling", false);
+    if (with_backface_culling)
+        manager->set_culling_mode(1);
+
+    return manager;
+}
+
 #pragma endregion
 
 /* --------------------------------------------- */
@@ -788,50 +909,15 @@ int main(int argc, char **argv)
 
     std::string init_camera_filepath = "assets/settings/camera_front_right.ini";
     if (cmdline_args.init_camera)
-    {
         init_camera_filepath = cmdline_args.init_camera_filepath;
-    }
-    auto camera = createCamera(init_camera_filepath, window);
-    Input *input = Input::init(window);
-    // azimuth & elevation
-    glm::vec2 orbitDirection = glm::vec2(-camera->angles.y, camera->angles.x);
-    float orbitDistance = 5.0f;
-    glm::vec3 orgbitCenter = glm::vec3(0.0f);
-
-    std::string vertShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/task2.vert");
-    std::string fragShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/task2.frag");
-    PipelineParams pipelineParams = {
-        .vertexShaderPath = vertShaderPath,
-        .fragmentShaderPath = fragShaderPath,
-        .polygonMode = VK_POLYGON_MODE_FILL,
-        .cullingMode = VK_CULL_MODE_NONE,
-    };
-
-    std::vector<VkPolygonMode> vk_polygon_modes = std::vector<VkPolygonMode>({
-        VK_POLYGON_MODE_FILL,
-        VK_POLYGON_MODE_LINE,
-    });
-    int selected_polygon_mode = 0;
-    std::vector<VkCullModeFlags> vk_culling_modes = std::vector<VkCullModeFlags>({
-        VK_CULL_MODE_NONE,
-        VK_CULL_MODE_BACK_BIT,
-        VK_CULL_MODE_FRONT_BIT,
-    });
-    int selected_culling_mode = 0;
-    auto vk_pipeline_matrix = createVkPipelineMatrix(pipelineParams, vk_polygon_modes, vk_culling_modes);
-
     std::string init_renderer_filepath = "assets/settings/renderer_standard.ini";
     if (cmdline_args.init_renderer)
-    {
         init_renderer_filepath = cmdline_args.init_renderer_filepath;
-    }
-    INIReader renderer_reader(init_renderer_filepath);
-    bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
-    if (as_wireframe)
-        selected_polygon_mode = 1;
-    bool with_backface_culling = renderer_reader.GetBoolean("renderer", "backface_culling", false);
-    if (with_backface_culling)
-        selected_culling_mode = 1;
+
+    std::shared_ptr<Camera> camera(createCamera(init_camera_filepath, window));
+    std::shared_ptr<Input> input = Input::init(window);
+    std::shared_ptr<OrbitControls> controls(new OrbitControls(camera));
+    std::unique_ptr<PipelineMatrixManager> pipelines = createPipelineManager(init_renderer_filepath);
 
     glm::mat4 model_matrix_1 = glm::mat4(1.0);
     model_matrix_1 = glm::translate(model_matrix_1, {0, 0, 0});
@@ -890,41 +976,10 @@ int main(int argc, char **argv)
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
 
-        if (input->isKeyTap(GLFW_KEY_F1))
-        {
-            selected_polygon_mode++;
-            selected_polygon_mode %= vk_polygon_modes.size();
-        }
+        pipelines->update();
+        VkPipeline vk_selected_pipeline = pipelines->selected();
 
-        if (input->isKeyTap(GLFW_KEY_F2))
-        {
-            selected_culling_mode++;
-            selected_culling_mode %= vk_culling_modes.size();
-        }
-        VkPipeline vk_selected_pipeline = vk_pipeline_matrix[selected_polygon_mode][selected_culling_mode];
-
-        orbitDistance -= input->scrollDelta().y / 5.0f;
-        orbitDistance = glm::clamp(orbitDistance, 0.1f, 100.0f);
-
-        if (input->isMouseDown(GLFW_MOUSE_BUTTON_LEFT))
-        {
-            auto delta = input->mouseDelta();
-            orbitDirection.x -= delta.x / 200.0f;
-            orbitDirection.x = glm::mod(glm::mod(orbitDirection.x, glm::two_pi<float>()) + glm::two_pi<float>(), glm::two_pi<float>());
-            orbitDirection.y += delta.y / 200.0f;
-            orbitDirection.y = glm::clamp(orbitDirection.y, -glm::half_pi<float>(), glm::half_pi<float>());
-        }
-
-        camera->position = orgbitCenter;
-        camera->position += glm::vec3(
-            glm::sin(orbitDirection.x) * glm::cos(orbitDirection.y),
-            glm::sin(orbitDirection.y),
-            glm::cos(orbitDirection.x) * glm::cos(orbitDirection.y));
-        camera->position *= orbitDistance;
-        camera->angles.x = -1.0f * orbitDirection.y;
-        camera->angles.y = 1.0f * orbitDirection.x;
-        camera->updateView();
-
+        controls->update();
         CameraUniformBlock camera_uniform_data = {
             .viewProjectionMatrix = camera->viewProjectionMatrix,
         };
@@ -977,7 +1032,7 @@ int main(int argc, char **argv)
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
     vklDestroyHostCoherentBufferAndItsBackingMemory(cube_vertices_buffer);
     vklDestroyHostCoherentBufferAndItsBackingMemory(cube_indices_buffer);
-    destroyVkPipelineMatrix(vk_pipeline_matrix);
+    pipelines->destory();
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
     vkDestroyDevice(vk_device, nullptr);
