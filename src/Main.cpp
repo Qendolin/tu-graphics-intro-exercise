@@ -975,11 +975,8 @@ int main(int argc, char **argv)
     std::unique_ptr<PipelineMatrixManager> pipelines = createPipelineManager(init_renderer_filepath);
 
     glm::mat4 model_matrix_1 = glm::mat4(1.0);
-    model_matrix_1 = glm::translate(model_matrix_1, {0, 0, 0});
-    model_matrix_1 = glm::rotate(model_matrix_1, glm::radians(0.0f), {0, 1, 0});
     glm::mat4 model_matrix_2 = glm::mat4(1.0);
-    model_matrix_2 = glm::translate(model_matrix_2, {1.5, -1, 0});
-    model_matrix_2 = glm::scale(model_matrix_2, {1, 2, 1});
+    model_matrix_2 = glm::rotate(model_matrix_2, glm::radians(45.0f), {0, 1, 0});
     ModelUniformBlock uniform_data_1 = {
         .color = {1.0, 1.0, 1.0, 1.0},
         .modelMatrix = model_matrix_1,
@@ -1013,11 +1010,17 @@ int main(int argc, char **argv)
     writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 0, uniform_buffer_2, sizeof(ModelUniformBlock));
     writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 1, uniform_buffer_3, sizeof(CameraUniformBlock));
 
-    auto cornell_vertices = createCornellVertices(1, 1, 1);
+    auto cornell_vertices = createCornellVertices(3, 3, 3);
     VkBuffer cornell_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cornell_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(cornell_vertices_buffer, &cornell_vertices.front(), cornell_vertices.size() * sizeof(Vertex));
     VkBuffer cornell_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cornell_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(cornell_indices_buffer, &cornell_indices[0], sizeof(cornell_indices));
+
+    auto cube_vertices = createCubeVertices(1.3, 2, 1.3, {1.0, 1.0, 1.0});
+    VkBuffer cube_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cube_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(cube_vertices_buffer, &cube_vertices.front(), cube_vertices.size() * sizeof(Vertex));
+    VkBuffer cube_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cube_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(cube_indices_buffer, &cube_indices[0], sizeof(cube_indices));
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
@@ -1045,18 +1048,20 @@ int main(int argc, char **argv)
         vklStartRecordingCommands();
         VkCommandBuffer vk_cmd_buffer = vklGetCurrentCommandBuffer();
         VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
+        VkDeviceSize vk_vertex_offset = 0;
+
         vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_1, 0, nullptr);
         vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
-        // VkBuffer teapotPositionBuffer = gcgGetTeapotPositionsBuffer();
-        VkDeviceSize vk_vertex_offset = 0;
         vkCmdBindVertexBuffers(vk_cmd_buffer, 0, 1, &cornell_vertices_buffer, &vk_vertex_offset);
-        // VkBuffer teapotIndicesBuffer = gcgGetTeapotIndicesBuffer();
         vkCmdBindIndexBuffer(vk_cmd_buffer, cornell_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
-
         vkCmdDrawIndexed(vk_cmd_buffer, std::size(cornell_indices), 1, 0, 0, 0);
 
-        // gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_1);
-        // gcgDrawTeapot(vk_selected_pipeline, vk_descriptor_set_2);
+        vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_2, 0, nullptr);
+        vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
+        vkCmdBindVertexBuffers(vk_cmd_buffer, 0, 1, &cube_vertices_buffer, &vk_vertex_offset);
+        vkCmdBindIndexBuffer(vk_cmd_buffer, cube_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(vk_cmd_buffer, std::size(cube_indices), 1, 0, 0, 0);
+
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
 
@@ -1087,6 +1092,8 @@ int main(int argc, char **argv)
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
     vklDestroyHostCoherentBufferAndItsBackingMemory(cornell_vertices_buffer);
     vklDestroyHostCoherentBufferAndItsBackingMemory(cornell_indices_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_vertices_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_indices_buffer);
     pipelines->destory();
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
