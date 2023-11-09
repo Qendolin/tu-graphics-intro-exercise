@@ -85,6 +85,7 @@ void errorCallbackFromGlfw(int error, const char *description) { std::cout << "G
 struct Vertex
 {
     glm::vec3 position;
+    glm::vec3 color;
 };
 
 struct ModelUniformBlock
@@ -123,39 +124,20 @@ uint32_t cube_indices[]{
     4, 6, 7,
     7, 5, 4};
 
-uint32_t cornell_indices[]{
-    // Top
-    2, 6, 7,
-    7, 3, 2,
+glm::vec3 cube_positions[]{
+    {-0.5, -0.5, 0.5},  // 0
+    {0.5, -0.5, 0.5},   // 1
+    {-0.5, 0.5, 0.5},   // 2
+    {0.5, 0.5, 0.5},    // 3
+    {-0.5, -0.5, -0.5}, // 4
+    {0.5, -0.5, -0.5},  // 5
+    {-0.5, 0.5, -0.5},  // 6
+    {0.5, 0.5, -0.5},   // 7
+};
 
-    // Bottom
-    5, 4, 0,
-    0, 1, 5,
-
-    // Left
-    6, 2, 0,
-    0, 4, 6,
-
-    // Right
-    1, 3, 7,
-    7, 5, 1,
-
-    // Back
-    7, 6, 4,
-    4, 5, 7};
-
-std::vector<Vertex> createCubeVertices(float width, float height, float depth)
+std::vector<Vertex> createCubeVertices(float width, float height, float depth, glm::vec3 color)
 {
-    auto positions = std::vector<glm::vec3>{
-        {-0.5, -0.5, 0.5},  // 0
-        {0.5, -0.5, 0.5},   // 1
-        {-0.5, 0.5, 0.5},   // 2
-        {0.5, 0.5, 0.5},    // 3
-        {-0.5, -0.5, -0.5}, // 4
-        {0.5, -0.5, -0.5},  // 5
-        {-0.5, 0.5, -0.5},  // 6
-        {0.5, 0.5, -0.5},   // 7
-    };
+    std::vector<glm::vec3> positions(std::begin(cube_positions), std::end(cube_positions));
 
     auto scale = glm::mat4(1.0);
     scale = glm::scale(scale, {width, height, depth});
@@ -168,7 +150,74 @@ std::vector<Vertex> createCubeVertices(float width, float height, float depth)
     auto vertices = std::vector<Vertex>(positions.size());
     for (size_t i = 0; i < vertices.size(); i++)
     {
-        vertices[i] = {positions[i]};
+        vertices[i] = {positions[i], color};
+    }
+
+    return vertices;
+}
+
+uint32_t cornell_position_swizzle[]{
+    // Top
+    2, 6, 7, 3,
+    // Bottom
+    5, 4, 0, 1,
+    // Left
+    6, 2, 0, 4,
+    // Right
+    1, 3, 7, 5,
+    // Back
+    7, 6, 4, 5};
+
+uint32_t cornell_indices[]{
+    // Top
+    0, 1, 2,
+    2, 3, 0,
+
+    // Bottom
+    4, 5, 6,
+    6, 7, 4,
+
+    // Left
+    8, 9, 10,
+    10, 11, 8,
+
+    // Right
+    12, 13, 14,
+    14, 15, 12,
+
+    // Back
+    16, 17, 18,
+    18, 19, 16};
+
+glm::vec3 cornell_colors[]{
+    {0.96, 0.93, 0.85}, // Top
+    {0.64, 0.64, 0.64}, // Bottom
+    {1.0, 0.0, 0.0},    // Left
+    {0.0, 1.0, 0.0},    // Right
+    {0.76, 0.74, 0.68}  // Back
+};
+
+std::vector<Vertex> createCornellVertices(float width, float height, float depth)
+{
+    std::vector<glm::vec3> positions(std::begin(cube_positions), std::end(cube_positions));
+
+    auto scale = glm::mat4(1.0);
+    scale = glm::scale(scale, {width, height, depth});
+
+    for (size_t i = 0; i < positions.size(); i++)
+    {
+        positions[i] = glm::vec3(scale * glm::vec4(positions[i], 1.0f));
+    }
+
+    auto vertices = std::vector<Vertex>(5 * 4);
+    for (size_t face = 0; face < 5; face++)
+    {
+        for (size_t v = 0; v < 4; v++)
+        {
+            size_t i = face * 4 + v;
+            vertices[i].position = positions[cornell_position_swizzle[i]];
+            vertices[i].color = cornell_colors[face];
+        }
     }
 
     return vertices;
@@ -665,27 +714,33 @@ VkPipeline createVkPipeline(PipelineParams &params)
             .stride = sizeof(Vertex),
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
         }},
-        .inputAttributeDescriptions = {{
-            .location = 0,
-            .binding = 0,
-            .format = VK_FORMAT_R32G32B32_SFLOAT,
-            .offset = 0u,
-        }},
-        .polygonDrawMode = params.polygonMode,
-        .triangleCullingMode = params.cullingMode,
-        .descriptorLayout = {
+        .inputAttributeDescriptions = {
             {
+                .location = 0,
                 .binding = 0,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_ALL,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
+                .offset = offsetof(Vertex, position),
             },
             {
-                .binding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_ALL,
+                .location = 1,
+                .binding = 0,
+                .format = VK_FORMAT_R32G32B32_SFLOAT,
+                .offset = offsetof(Vertex, color),
             }},
+        .polygonDrawMode = params.polygonMode,
+        .triangleCullingMode = params.cullingMode,
+        .descriptorLayout = {{
+                                 .binding = 0,
+                                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                 .descriptorCount = 1,
+                                 .stageFlags = VK_SHADER_STAGE_ALL,
+                             },
+                             {
+                                 .binding = 1,
+                                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                 .descriptorCount = 1,
+                                 .stageFlags = VK_SHADER_STAGE_ALL,
+                             }},
     };
     return vklCreateGraphicsPipeline(graphics_pipeline_config);
 }
@@ -926,7 +981,7 @@ int main(int argc, char **argv)
     model_matrix_2 = glm::translate(model_matrix_2, {1.5, -1, 0});
     model_matrix_2 = glm::scale(model_matrix_2, {1, 2, 1});
     ModelUniformBlock uniform_data_1 = {
-        .color = {0.2, 0.6, 0.4, 1.0},
+        .color = {1.0, 1.0, 1.0, 1.0},
         .modelMatrix = model_matrix_1,
     };
     ModelUniformBlock uniform_data_2 = {
@@ -958,11 +1013,11 @@ int main(int argc, char **argv)
     writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 0, uniform_buffer_2, sizeof(ModelUniformBlock));
     writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 1, uniform_buffer_3, sizeof(CameraUniformBlock));
 
-    auto cube_vertices = createCubeVertices(1, 1, 1);
-    VkBuffer cube_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cube_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(cube_vertices_buffer, &cube_vertices.front(), cube_vertices.size() * sizeof(Vertex));
-    VkBuffer cube_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cornell_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(cube_indices_buffer, &cornell_indices[0], sizeof(cornell_indices));
+    auto cornell_vertices = createCornellVertices(1, 1, 1);
+    VkBuffer cornell_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cornell_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(cornell_vertices_buffer, &cornell_vertices.front(), cornell_vertices.size() * sizeof(Vertex));
+    VkBuffer cornell_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cornell_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(cornell_indices_buffer, &cornell_indices[0], sizeof(cornell_indices));
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
@@ -994,9 +1049,9 @@ int main(int argc, char **argv)
         vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
         // VkBuffer teapotPositionBuffer = gcgGetTeapotPositionsBuffer();
         VkDeviceSize vk_vertex_offset = 0;
-        vkCmdBindVertexBuffers(vk_cmd_buffer, 0, 1, &cube_vertices_buffer, &vk_vertex_offset);
+        vkCmdBindVertexBuffers(vk_cmd_buffer, 0, 1, &cornell_vertices_buffer, &vk_vertex_offset);
         // VkBuffer teapotIndicesBuffer = gcgGetTeapotIndicesBuffer();
-        vkCmdBindIndexBuffer(vk_cmd_buffer, cube_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(vk_cmd_buffer, cornell_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
 
         vkCmdDrawIndexed(vk_cmd_buffer, std::size(cornell_indices), 1, 0, 0, 0);
 
@@ -1030,8 +1085,8 @@ int main(int argc, char **argv)
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_1);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_2);
     vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_vertices_buffer);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_indices_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(cornell_vertices_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(cornell_indices_buffer);
     pipelines->destory();
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
