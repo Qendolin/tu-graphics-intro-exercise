@@ -88,7 +88,7 @@ struct Vertex
     glm::vec3 color;
 };
 
-struct ModelUniformBlock
+struct MeshInstanceUniformBlock
 {
     glm::vec4 color;
     glm::mat4 modelMatrix;
@@ -99,7 +99,7 @@ struct CameraUniformBlock
     glm::mat4 viewProjectionMatrix;
 };
 
-uint32_t cube_indices[]{
+std::vector<uint32_t> cube_indices = {
     // Top
     7, 6, 2,
     2, 3, 7,
@@ -168,7 +168,7 @@ uint32_t cornell_position_swizzle[]{
     // Back
     7, 6, 4, 5};
 
-uint32_t cornell_indices[]{
+std::vector<uint32_t> cornell_indices = {
     // Top
     0, 1, 2,
     2, 3, 0,
@@ -536,6 +536,10 @@ void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t b
 
 class Camera
 {
+private:
+    CameraUniformBlock uniform_block;
+    VkBuffer uniform_buffer = VK_NULL_HANDLE;
+
 public:
     float fovRad;
     glm::vec2 viewportSize;
@@ -546,7 +550,6 @@ public:
     glm::vec3 angles;
     glm::mat4 viewMatrix;
     glm::mat4 projectionMatrix;
-    glm::mat4 viewProjectionMatrix;
 
     Camera(float fovRad, glm::vec2 viewportSize, float nearPlane, float farPlane, glm::vec3 position, glm::vec3 angles)
     {
@@ -556,6 +559,9 @@ public:
         this->farPlane = farPlane;
         this->position = position;
         this->angles = angles;
+
+        uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(uniform_block), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
         updateProjection();
         updateView();
     }
@@ -564,7 +570,7 @@ public:
     {
         float aspect = viewportSize.x / viewportSize.y;
         projectionMatrix = gcgCreatePerspectiveProjectionMatrix(fovRad, aspect, nearPlane, farPlane);
-        viewProjectionMatrix = projectionMatrix * viewMatrix;
+        set_uniforms({projectionMatrix * viewMatrix});
     }
 
     void updateView()
@@ -575,7 +581,23 @@ public:
         viewMatrix = glm::rotate(viewMatrix, angles.y, {0, 1, 0});
         viewMatrix = glm::rotate(viewMatrix, angles.x, {1, 0, 0});
         viewMatrix = glm::inverse(viewMatrix);
-        viewProjectionMatrix = projectionMatrix * viewMatrix;
+        set_uniforms({projectionMatrix * viewMatrix});
+    }
+
+    void bind_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
+    {
+        writeDescriptorSetBuffer(device, descriptor_set, binding, uniform_buffer, sizeof(uniform_block));
+    }
+
+    void set_uniforms(CameraUniformBlock data)
+    {
+        uniform_block = data;
+        vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &uniform_block, sizeof(uniform_block));
+    }
+
+    void destory()
+    {
+        vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
     }
 };
 
@@ -894,6 +916,71 @@ std::unique_ptr<PipelineMatrixManager> createPipelineManager(std::string init_re
     return manager;
 }
 
+class Mesh
+{
+private:
+    VkBuffer vertices = VK_NULL_HANDLE;
+    VkBuffer indices = VK_NULL_HANDLE;
+
+public:
+    Mesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices)
+    {
+        this->vertices = vklCreateHostCoherentBufferWithBackingMemory(vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+        vklCopyDataIntoHostCoherentBuffer(this->vertices, &vertices.front(), vertices.size() * sizeof(Vertex));
+        this->indices = vklCreateHostCoherentBufferWithBackingMemory(indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+        vklCopyDataIntoHostCoherentBuffer(this->indices, &indices.front(), indices.size() * sizeof(uint32_t));
+    }
+
+    void destroy()
+    {
+        vklDestroyHostCoherentBufferAndItsBackingMemory(vertices);
+        vklDestroyHostCoherentBufferAndItsBackingMemory(indices);
+    }
+
+    void bind(VkCommandBuffer cmd_buffer)
+    {
+        VkDeviceSize vertex_offset = 0;
+        vkCmdBindVertexBuffers(cmd_buffer, 0, 1, &vertices, &vertex_offset);
+        vkCmdBindIndexBuffer(cmd_buffer, indices, 0, VK_INDEX_TYPE_UINT32);
+    }
+};
+
+class MeshInstance
+{
+private:
+    VkBuffer uniform_buffer = VK_NULL_HANDLE;
+    MeshInstanceUniformBlock uniform_block;
+
+public:
+    std::shared_ptr<Mesh> mesh = nullptr;
+
+    MeshInstance(std::shared_ptr<Mesh> mesh)
+    {
+        this->mesh = mesh;
+        uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(uniform_block), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+        set_uniforms({
+            .color = {1.0, 1.0, 1.0, 1.0},
+            .modelMatrix = glm::mat4(1.0),
+        });
+    }
+
+    void bind_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
+    {
+        writeDescriptorSetBuffer(device, descriptor_set, binding, uniform_buffer, sizeof(uniform_block));
+    }
+
+    void set_uniforms(MeshInstanceUniformBlock data)
+    {
+        uniform_block = data;
+        vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &uniform_block, sizeof(uniform_block));
+    }
+
+    void destroy()
+    {
+        vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
+    }
+};
+
 #pragma endregion
 
 /* --------------------------------------------- */
@@ -904,6 +991,7 @@ int main(int argc, char **argv)
 {
     VKL_LOG(":::::: WELCOME TO GCG 2023 ::::::");
 
+#pragma region vulkan_setup
     CMDLineArgs cmdline_args;
     gcgParseArgs(cmdline_args, argc, argv);
 
@@ -925,6 +1013,7 @@ int main(int argc, char **argv)
     VkDetailedImage swapchain_depth_attachment = {};
     VkSurfaceFormatKHR vk_surface_image_format = getSurfaceImageFormat(vk_physical_device, vk_surface);
     VkSwapchainKHR vk_swapchain = createVkSwapchain(vk_physical_device, vk_device, vk_surface, vk_surface_image_format, window, graphics_queue_family, swapchain_color_attachments, &swapchain_depth_attachment);
+#pragma endregion
 
 #pragma region check_instances
     if (!vk_instance)
@@ -974,23 +1063,6 @@ int main(int argc, char **argv)
     std::shared_ptr<OrbitControls> controls(new OrbitControls(camera));
     std::unique_ptr<PipelineMatrixManager> pipelines = createPipelineManager(init_renderer_filepath);
 
-    glm::mat4 model_matrix_1 = glm::mat4(1.0);
-    glm::mat4 model_matrix_2 = glm::mat4(1.0);
-    model_matrix_2 = glm::rotate(model_matrix_2, glm::radians(45.0f), {0, 1, 0});
-    ModelUniformBlock uniform_data_1 = {
-        .color = {1.0, 1.0, 1.0, 1.0},
-        .modelMatrix = model_matrix_1,
-    };
-    ModelUniformBlock uniform_data_2 = {
-        .color = {0.7, 0.1, 0.2, 1.0},
-        .modelMatrix = model_matrix_2,
-    };
-    VkBuffer uniform_buffer_1 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(ModelUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    VkBuffer uniform_buffer_2 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(ModelUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    VkBuffer uniform_buffer_3 = vklCreateHostCoherentBufferWithBackingMemory(sizeof(CameraUniformBlock), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_1, &uniform_data_1, sizeof(ModelUniformBlock));
-    vklCopyDataIntoHostCoherentBuffer(uniform_buffer_2, &uniform_data_2, sizeof(ModelUniformBlock));
-
     VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 8, 16);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
         vk_device,
@@ -1005,27 +1077,31 @@ int main(int argc, char **argv)
 
     VkDescriptorSet vk_descriptor_set_1 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
     VkDescriptorSet vk_descriptor_set_2 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
-    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_1, 0, uniform_buffer_1, sizeof(ModelUniformBlock));
-    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_1, 1, uniform_buffer_3, sizeof(CameraUniformBlock));
-    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 0, uniform_buffer_2, sizeof(ModelUniformBlock));
-    writeDescriptorSetBuffer(vk_device, vk_descriptor_set_2, 1, uniform_buffer_3, sizeof(CameraUniformBlock));
 
-    auto cornell_vertices = createCornellVertices(3, 3, 3);
-    VkBuffer cornell_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cornell_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(cornell_vertices_buffer, &cornell_vertices.front(), cornell_vertices.size() * sizeof(Vertex));
-    VkBuffer cornell_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cornell_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(cornell_indices_buffer, &cornell_indices[0], sizeof(cornell_indices));
+    std::shared_ptr<Mesh> cornell_mesh = std::make_shared<Mesh>(createCornellVertices(3, 3, 3), cornell_indices);
+    std::shared_ptr<Mesh> cube_mesh = std::make_shared<Mesh>(createCubeVertices(1.3, 2, 1.3, {1.0, 1.0, 1.0}), cube_indices);
 
-    auto cube_vertices = createCubeVertices(1.3, 2, 1.3, {1.0, 1.0, 1.0});
-    VkBuffer cube_vertices_buffer = vklCreateHostCoherentBufferWithBackingMemory(cube_vertices.size() * sizeof(Vertex), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(cube_vertices_buffer, &cube_vertices.front(), cube_vertices.size() * sizeof(Vertex));
-    VkBuffer cube_indices_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(cube_indices), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    vklCopyDataIntoHostCoherentBuffer(cube_indices_buffer, &cube_indices[0], sizeof(cube_indices));
+    std::unique_ptr<MeshInstance> cornell_instance = std::make_unique<MeshInstance>(cornell_mesh);
+    cornell_instance->set_uniforms({
+        .color = {1.0, 1.0, 1.0, 1.0},
+        .modelMatrix = glm::mat4(1.0),
+    });
+    cornell_instance->bind_uniforms(vk_device, vk_descriptor_set_1, 0);
+    std::unique_ptr<MeshInstance> cube_instance = std::make_unique<MeshInstance>(cube_mesh);
+    cube_instance->set_uniforms({
+        .color = {0.7, 0.1, 0.2, 1.0},
+        .modelMatrix = glm::rotate(glm::mat4(1.0), glm::radians(45.0f), {0, 1, 0}),
+    });
+    cube_instance->bind_uniforms(vk_device, vk_descriptor_set_2, 0);
+
+    camera->bind_uniforms(vk_device, vk_descriptor_set_1, 1);
+    camera->bind_uniforms(vk_device, vk_descriptor_set_2, 1);
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
     while (!glfwWindowShouldClose(window))
     {
+        // NOTE: input update need to be called before glfwPollEvents
         input->update();
         glfwPollEvents();
 
@@ -1035,31 +1111,23 @@ int main(int argc, char **argv)
         }
 
         pipelines->update();
-        VkPipeline vk_selected_pipeline = pipelines->selected();
-
         controls->update();
-        CameraUniformBlock camera_uniform_data = {
-            .viewProjectionMatrix = camera->viewProjectionMatrix,
-        };
-        vklCopyDataIntoHostCoherentBuffer(uniform_buffer_3, &camera_uniform_data, sizeof(CameraUniformBlock));
 
         vklWaitForNextSwapchainImage();
 
         vklStartRecordingCommands();
         VkCommandBuffer vk_cmd_buffer = vklGetCurrentCommandBuffer();
+        VkPipeline vk_selected_pipeline = pipelines->selected();
+        vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
         VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
         VkDeviceSize vk_vertex_offset = 0;
 
         vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_1, 0, nullptr);
-        vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
-        vkCmdBindVertexBuffers(vk_cmd_buffer, 0, 1, &cornell_vertices_buffer, &vk_vertex_offset);
-        vkCmdBindIndexBuffer(vk_cmd_buffer, cornell_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
+        cornell_mesh->bind(vk_cmd_buffer);
         vkCmdDrawIndexed(vk_cmd_buffer, std::size(cornell_indices), 1, 0, 0, 0);
 
         vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_2, 0, nullptr);
-        vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
-        vkCmdBindVertexBuffers(vk_cmd_buffer, 0, 1, &cube_vertices_buffer, &vk_vertex_offset);
-        vkCmdBindIndexBuffer(vk_cmd_buffer, cube_indices_buffer, 0, VK_INDEX_TYPE_UINT32);
+        cube_mesh->bind(vk_cmd_buffer);
         vkCmdDrawIndexed(vk_cmd_buffer, std::size(cube_indices), 1, 0, 0, 0);
 
         vklEndRecordingCommands();
@@ -1070,9 +1138,8 @@ int main(int argc, char **argv)
             uint32_t idx = vklGetCurrentSwapChainImageIndex();
             std::string screenshot_filename = "screenshot";
             if (cmdline_args.set_filename)
-            {
                 screenshot_filename = cmdline_args.filename;
-            }
+
             int width, height;
             glfwGetFramebufferSize(window, &width, &height);
             gcgSaveScreenshot(screenshot_filename, swapchain_color_attachments[idx].image, width,
@@ -1087,13 +1154,11 @@ int main(int argc, char **argv)
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_1);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_2);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer_3);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(cornell_vertices_buffer);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(cornell_indices_buffer);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_vertices_buffer);
-    vklDestroyHostCoherentBufferAndItsBackingMemory(cube_indices_buffer);
+    camera->destory();
+    cube_instance->destroy();
+    cube_mesh->destroy();
+    cornell_instance->destroy();
+    cornell_mesh->destroy();
     pipelines->destory();
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
