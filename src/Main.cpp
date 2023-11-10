@@ -99,6 +99,8 @@ struct CameraUniformBlock
     glm::mat4 viewProjectionMatrix;
 };
 
+#pragma region hide_this_stuff
+
 std::vector<uint32_t> cube_indices = {
     // Top
     7, 6, 2,
@@ -223,7 +225,6 @@ std::vector<Vertex> createCornellVertices(float width, float height, float depth
     return vertices;
 }
 
-#pragma region hide_this_stuff
 GLFWwindow *createGLFWWindow()
 {
     INIReader window_reader("assets/settings/window.ini");
@@ -921,6 +922,7 @@ class Mesh
 private:
     VkBuffer vertices = VK_NULL_HANDLE;
     VkBuffer indices = VK_NULL_HANDLE;
+    uint32_t index_count;
 
 public:
     Mesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices)
@@ -929,6 +931,7 @@ public:
         vklCopyDataIntoHostCoherentBuffer(this->vertices, &vertices.front(), vertices.size() * sizeof(Vertex));
         this->indices = vklCreateHostCoherentBufferWithBackingMemory(indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
         vklCopyDataIntoHostCoherentBuffer(this->indices, &indices.front(), indices.size() * sizeof(uint32_t));
+        this->index_count = indices.size();
     }
 
     void destroy()
@@ -942,6 +945,11 @@ public:
         VkDeviceSize vertex_offset = 0;
         vkCmdBindVertexBuffers(cmd_buffer, 0, 1, &vertices, &vertex_offset);
         vkCmdBindIndexBuffer(cmd_buffer, indices, 0, VK_INDEX_TYPE_UINT32);
+    }
+
+    void draw(VkCommandBuffer cmd_buffer)
+    {
+        vkCmdDrawIndexed(cmd_buffer, index_count, 1, 0, 0, 0);
     }
 };
 
@@ -980,6 +988,73 @@ public:
         vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
     }
 };
+
+std::unique_ptr<Mesh> createCylinderMesh(float radius, float height, int segments, glm::vec3 color)
+{
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    vertices.push_back({{0, 0, 0}, color});
+    vertices.push_back({{0, height, 0}, color});
+
+    const int bot_start = 2;
+    const int bot_end = 2 + segments - 1;
+    const int top_start = 2 + segments;
+    const int top_end = 2 + segments * 2 - 1;
+
+    for (size_t half = 0; half < 2; half++)
+    {
+        bool top = half == 1;
+        for (size_t s = 0; s < segments; s++)
+        {
+            float theta = glm::two_pi<float>() * s / segments;
+            glm::vec3 v = {
+                glm::cos(theta) * radius,
+                top ? height : 0.0,
+                glm::sin(theta) * radius,
+            };
+
+            vertices.push_back({v, color});
+
+            if (top && s > 0)
+            {
+                indices.push_back(0);
+                indices.push_back(bot_start + s - 1);
+                indices.push_back(bot_start + s);
+
+                indices.push_back(top_start + s - 1);
+                indices.push_back(bot_start + s);
+                indices.push_back(bot_start + s - 1);
+
+                indices.push_back(1);
+                indices.push_back(top_start + s);
+                indices.push_back(top_start + s - 1);
+
+                indices.push_back(bot_start + s);
+                indices.push_back(top_start + s - 1);
+                indices.push_back(top_start + s);
+            }
+        }
+    }
+
+    indices.push_back(0);
+    indices.push_back(bot_end);
+    indices.push_back(bot_start);
+
+    indices.push_back(top_end);
+    indices.push_back(bot_start);
+    indices.push_back(bot_end);
+
+    indices.push_back(1);
+    indices.push_back(top_start);
+    indices.push_back(top_end);
+
+    indices.push_back(bot_start);
+    indices.push_back(top_end);
+    indices.push_back(top_start);
+
+    return make_unique<Mesh>(vertices, indices);
+}
 
 #pragma endregion
 
@@ -1080,6 +1155,7 @@ int main(int argc, char **argv)
 
     std::shared_ptr<Mesh> cornell_mesh = std::make_shared<Mesh>(createCornellVertices(3, 3, 3), cornell_indices);
     std::shared_ptr<Mesh> cube_mesh = std::make_shared<Mesh>(createCubeVertices(1.3, 2, 1.3, {1.0, 1.0, 1.0}), cube_indices);
+    std::shared_ptr<Mesh> cylinder_mesh(createCylinderMesh(0.2, 2, 18, {1.0, 1.0, 1.0}));
 
     std::unique_ptr<MeshInstance> cornell_instance = std::make_unique<MeshInstance>(cornell_mesh);
     cornell_instance->set_uniforms({
@@ -1087,7 +1163,7 @@ int main(int argc, char **argv)
         .modelMatrix = glm::mat4(1.0),
     });
     cornell_instance->bind_uniforms(vk_device, vk_descriptor_set_1, 0);
-    std::unique_ptr<MeshInstance> cube_instance = std::make_unique<MeshInstance>(cube_mesh);
+    std::unique_ptr<MeshInstance> cube_instance = std::make_unique<MeshInstance>(cylinder_mesh);
     cube_instance->set_uniforms({
         .color = {0.7, 0.1, 0.2, 1.0},
         .modelMatrix = glm::rotate(glm::mat4(1.0), glm::radians(45.0f), {0, 1, 0}),
@@ -1123,12 +1199,12 @@ int main(int argc, char **argv)
         VkDeviceSize vk_vertex_offset = 0;
 
         vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_1, 0, nullptr);
-        cornell_mesh->bind(vk_cmd_buffer);
-        vkCmdDrawIndexed(vk_cmd_buffer, std::size(cornell_indices), 1, 0, 0, 0);
+        cornell_instance->mesh->bind(vk_cmd_buffer);
+        cornell_instance->mesh->draw(vk_cmd_buffer);
 
         vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_2, 0, nullptr);
-        cube_mesh->bind(vk_cmd_buffer);
-        vkCmdDrawIndexed(vk_cmd_buffer, std::size(cube_indices), 1, 0, 0, 0);
+        cube_instance->mesh->bind(vk_cmd_buffer);
+        cube_instance->mesh->draw(vk_cmd_buffer);
 
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
@@ -1157,6 +1233,7 @@ int main(int argc, char **argv)
     camera->destory();
     cube_instance->destroy();
     cube_mesh->destroy();
+    cylinder_mesh->destroy();
     cornell_instance->destroy();
     cornell_mesh->destroy();
     pipelines->destory();
