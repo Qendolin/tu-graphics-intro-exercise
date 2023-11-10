@@ -1002,16 +1002,16 @@ std::unique_ptr<Mesh> createCylinderMesh(float radius, float height, int segment
     const int top_start = 2 + segments;
     const int top_end = 2 + segments * 2 - 1;
 
-    for (size_t half = 0; half < 2; half++)
+    for (int half = 0; half < 2; half++)
     {
         bool top = half == 1;
-        for (size_t s = 0; s < segments; s++)
+        for (int s = 0; s < segments; s++)
         {
-            float theta = glm::two_pi<float>() * s / segments;
+            float phi = glm::two_pi<float>() * s / segments;
             glm::vec3 v = {
-                glm::cos(theta) * radius,
+                glm::cos(phi) * radius,
                 top ? height : 0.0,
-                glm::sin(theta) * radius,
+                glm::sin(phi) * radius,
             };
 
             vertices.push_back({v, color});
@@ -1052,6 +1052,83 @@ std::unique_ptr<Mesh> createCylinderMesh(float radius, float height, int segment
     indices.push_back(bot_start);
     indices.push_back(top_end);
     indices.push_back(top_start);
+
+    return make_unique<Mesh>(vertices, indices);
+}
+
+std::unique_ptr<Mesh> createSphereMesh(float radius, int rings, int segments, glm::vec3 color)
+{
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    vertices.push_back({{0, -radius, 0}, color});
+    vertices.push_back({{0, radius, 0}, color});
+
+    int prev_ring = 0;
+    int curr_ring = 2;
+
+    for (int r = 1; r < rings; r++)
+    {
+        bool cap = r == 1 || r == rings - 1;
+        bool top_cap = r == rings - 1;
+        float theta = glm::pi<float>() * r / rings;
+        for (int s = 0; s < segments; s++)
+        {
+            float phi = glm::two_pi<float>() * s / segments;
+
+            glm::vec3 v = {
+                radius * glm::sin(theta) * glm::cos(phi),
+                radius * -glm::cos(theta),
+                radius * glm::sin(theta) * glm::sin(phi),
+            };
+
+            vertices.push_back({v, color});
+
+            if (s == 0)
+                continue;
+
+            if (cap)
+            {
+                indices.push_back(curr_ring + s - 1);
+                if (top_cap)
+                    indices.push_back(1);
+                indices.push_back(curr_ring + s);
+                if (!top_cap)
+                    indices.push_back(0);
+            }
+            if (r > 1)
+            {
+                indices.push_back(curr_ring + s - 1);
+                indices.push_back(curr_ring + s);
+                indices.push_back(prev_ring + s - 1);
+
+                indices.push_back(prev_ring + s);
+                indices.push_back(prev_ring + s - 1);
+                indices.push_back(curr_ring + s);
+            }
+        }
+        if (cap)
+        {
+            indices.push_back(curr_ring + segments - 1);
+            if (top_cap)
+                indices.push_back(1);
+            indices.push_back(curr_ring);
+            if (!top_cap)
+                indices.push_back(0);
+        }
+        if (r > 1)
+        {
+            indices.push_back(curr_ring + segments - 1);
+            indices.push_back(curr_ring);
+            indices.push_back(prev_ring + segments - 1);
+
+            indices.push_back(prev_ring);
+            indices.push_back(prev_ring + segments - 1);
+            indices.push_back(curr_ring);
+        }
+        prev_ring = curr_ring;
+        curr_ring += segments;
+    }
 
     return make_unique<Mesh>(vertices, indices);
 }
@@ -1156,6 +1233,7 @@ int main(int argc, char **argv)
     std::shared_ptr<Mesh> cornell_mesh = std::make_shared<Mesh>(createCornellVertices(3, 3, 3), cornell_indices);
     std::shared_ptr<Mesh> cube_mesh = std::make_shared<Mesh>(createCubeVertices(1.3, 2, 1.3, {1.0, 1.0, 1.0}), cube_indices);
     std::shared_ptr<Mesh> cylinder_mesh(createCylinderMesh(0.2, 2, 18, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> sphere_mesh(createSphereMesh(0.24, 8, 18, {1.0, 1.0, 1.0}));
 
     std::unique_ptr<MeshInstance> cornell_instance = std::make_unique<MeshInstance>(cornell_mesh);
     cornell_instance->set_uniforms({
@@ -1163,7 +1241,7 @@ int main(int argc, char **argv)
         .modelMatrix = glm::mat4(1.0),
     });
     cornell_instance->bind_uniforms(vk_device, vk_descriptor_set_1, 0);
-    std::unique_ptr<MeshInstance> cube_instance = std::make_unique<MeshInstance>(cylinder_mesh);
+    std::unique_ptr<MeshInstance> cube_instance = std::make_unique<MeshInstance>(sphere_mesh);
     cube_instance->set_uniforms({
         .color = {0.7, 0.1, 0.2, 1.0},
         .modelMatrix = glm::rotate(glm::mat4(1.0), glm::radians(45.0f), {0, 1, 0}),
@@ -1234,6 +1312,7 @@ int main(int argc, char **argv)
     cube_instance->destroy();
     cube_mesh->destroy();
     cylinder_mesh->destroy();
+    sphere_mesh->destroy();
     cornell_instance->destroy();
     cornell_mesh->destroy();
     pipelines->destory();
