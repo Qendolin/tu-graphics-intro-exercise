@@ -82,6 +82,15 @@ void errorCallbackFromGlfw(int error, const char *description) { std::cout << "G
 
 #pragma endregion
 
+class ITrash
+{
+public:
+    virtual ~ITrash() {}
+    virtual void destroy() = 0;
+};
+
+std::vector<std::shared_ptr<ITrash>> trash;
+
 struct Vertex
 {
     glm::vec3 position;
@@ -457,14 +466,14 @@ VkDescriptorPool createVkDescriptorPool(VkDevice vkDevice, uint32_t maxSets, uin
         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptorCount = descriptorCount,
     };
-    VkDescriptorPoolCreateInfo descriptorÜoolCreateInfo = {
+    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .maxSets = maxSets,
         .poolSizeCount = 1,
         .pPoolSizes = &descriptorPoolSize,
     };
     VkDescriptorPool vkDescriptorPool = VK_NULL_HANDLE;
-    VkResult error = vkCreateDescriptorPool(vkDevice, &descriptorÜoolCreateInfo, nullptr, &vkDescriptorPool);
+    VkResult error = vkCreateDescriptorPool(vkDevice, &descriptorPoolCreateInfo, nullptr, &vkDescriptorPool);
     VKL_CHECK_VULKAN_ERROR(error);
 
     return vkDescriptorPool;
@@ -516,12 +525,49 @@ VkDescriptorSet createVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDesc
     return vkDescriptorSet;
 }
 
-void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkBuffer buffer, size_t size, uint32_t start = 0, uint32_t count = -1)
+struct UniformBufferSlot
+{
+    VkDeviceSize offset;
+    VkDeviceSize size;
+};
+
+class SharedUniformBuffer : public ITrash
+{
+private:
+    VkDeviceSize element_size = 0;
+    VkDeviceSize element_stride = 0;
+
+public:
+    VkBuffer buffer = VK_NULL_HANDLE;
+
+    SharedUniformBuffer(VkPhysicalDevice device, VkDeviceSize element_size, uint32_t element_count)
+    {
+        VkPhysicalDeviceProperties device_props = {};
+        vkGetPhysicalDeviceProperties(device, &device_props);
+        auto alignment = device_props.limits.minUniformBufferOffsetAlignment;
+        // from https://github.com/SaschaWillems/Vulkan/tree/master/examples/dynamicuniformbuffer
+        this->element_stride = (element_size + alignment - 1) & ~(alignment - 1);
+        this->element_size = element_size;
+        this->buffer = vklCreateHostCoherentBufferWithBackingMemory(element_count * element_stride, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    }
+
+    UniformBufferSlot slot(uint32_t index)
+    {
+        return UniformBufferSlot{element_stride * index, element_size};
+    }
+
+    virtual void destroy()
+    {
+        vklDestroyHostCoherentBufferAndItsBackingMemory(buffer);
+    }
+};
+
+void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkBuffer buffer, size_t size, UniformBufferSlot range = {0, (VkDeviceSize)-1})
 {
     VkDescriptorBufferInfo bufferInfo = {
         .buffer = buffer,
-        .offset = start * size,
-        .range = count == -1 ? VK_WHOLE_SIZE : count * size,
+        .offset = range.offset,
+        .range = range.size == (VkDeviceSize)-1 ? VK_WHOLE_SIZE : range.size,
     };
     VkWriteDescriptorSet vkWriteDescriptorSet = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -535,7 +581,7 @@ void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t b
     vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, nullptr);
 }
 
-class Camera
+class Camera : public ITrash
 {
 private:
     CameraUniformBlock uniform_block;
@@ -585,18 +631,20 @@ public:
         set_uniforms({projectionMatrix * viewMatrix});
     }
 
-    void bind_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
+    void init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
     {
         writeDescriptorSetBuffer(device, descriptor_set, binding, uniform_buffer, sizeof(uniform_block));
+        set_uniforms(uniform_block);
     }
 
     void set_uniforms(CameraUniformBlock data)
     {
         uniform_block = data;
-        vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &uniform_block, sizeof(uniform_block));
+        if (uniform_buffer != VK_NULL_HANDLE)
+            vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &uniform_block, sizeof(uniform_block));
     }
 
-    void destory()
+    virtual void destroy()
     {
         vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
     }
@@ -839,7 +887,7 @@ public:
     }
 };
 
-class PipelineMatrixManager
+class PipelineMatrixManager : public ITrash
 {
 private:
     std::vector<VkPolygonMode> polygon_modes = std::vector<VkPolygonMode>({
@@ -870,7 +918,7 @@ public:
         matrix = createVkPipelineMatrix(pipelineParams, polygon_modes, culling_modes);
     }
 
-    void destory()
+    virtual void destroy()
     {
         destroyVkPipelineMatrix(matrix);
     }
@@ -917,7 +965,7 @@ std::unique_ptr<PipelineMatrixManager> createPipelineManager(std::string init_re
     return manager;
 }
 
-class Mesh
+class Mesh : public ITrash
 {
 private:
     VkBuffer vertices = VK_NULL_HANDLE;
@@ -934,7 +982,7 @@ public:
         this->index_count = indices.size();
     }
 
-    void destroy()
+    virtual void destroy()
     {
         vklDestroyHostCoherentBufferAndItsBackingMemory(vertices);
         vklDestroyHostCoherentBufferAndItsBackingMemory(indices);
@@ -956,8 +1004,13 @@ public:
 class MeshInstance
 {
 private:
+    MeshInstanceUniformBlock uniform_block = {
+        .color = {1.0, 1.0, 1.0, 1.0},
+        .modelMatrix = glm::mat4(1.0),
+    };
     VkBuffer uniform_buffer = VK_NULL_HANDLE;
-    MeshInstanceUniformBlock uniform_block;
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    UniformBufferSlot uniform_slot = {};
 
 public:
     std::shared_ptr<Mesh> mesh = nullptr;
@@ -965,27 +1018,32 @@ public:
     MeshInstance(std::shared_ptr<Mesh> mesh)
     {
         this->mesh = mesh;
-        uniform_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(uniform_block), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-        set_uniforms({
-            .color = {1.0, 1.0, 1.0, 1.0},
-            .modelMatrix = glm::mat4(1.0),
-        });
     }
 
-    void bind_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
+    void init_uniforms(VkDevice device, VkDescriptorPool descriptor_pool, VkDescriptorSetLayout descriptor_layout, uint32_t binding, VkBuffer uniform_buffer, UniformBufferSlot slot)
     {
-        writeDescriptorSetBuffer(device, descriptor_set, binding, uniform_buffer, sizeof(uniform_block));
+        this->descriptor_set = createVkDescriptorSet(device, descriptor_pool, descriptor_layout);
+        writeDescriptorSetBuffer(device, descriptor_set, binding, uniform_buffer, sizeof(uniform_block), slot);
+        this->uniform_buffer = uniform_buffer;
+        this->uniform_slot = slot;
+        set_uniforms(uniform_block);
     }
 
     void set_uniforms(MeshInstanceUniformBlock data)
     {
         uniform_block = data;
-        vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &uniform_block, sizeof(uniform_block));
+        if (uniform_buffer != VK_NULL_HANDLE)
+            vklCopyDataIntoHostCoherentBuffer(uniform_buffer, uniform_slot.offset, &uniform_block, uniform_slot.size);
     }
 
-    void destroy()
+    void bind_uniforms(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout)
     {
-        vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
+        vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
+    }
+
+    VkDescriptorSet get_descriptor_set()
+    {
+        return descriptor_set;
     }
 };
 
@@ -994,8 +1052,8 @@ std::unique_ptr<Mesh> createCylinderMesh(float radius, float height, int segment
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
-    vertices.push_back({{0, 0, 0}, color});
-    vertices.push_back({{0, height, 0}, color});
+    vertices.push_back({{0, -height / 2, 0}, color});
+    vertices.push_back({{0, height / 2, 0}, color});
 
     const int bot_start = 2;
     const int bot_end = 2 + segments - 1;
@@ -1010,7 +1068,7 @@ std::unique_ptr<Mesh> createCylinderMesh(float radius, float height, int segment
             float phi = glm::two_pi<float>() * s / segments;
             glm::vec3 v = {
                 glm::cos(phi) * radius,
-                top ? height : 0.0,
+                top ? height / 2 : -height / 2,
                 glm::sin(phi) * radius,
             };
 
@@ -1133,6 +1191,209 @@ std::unique_ptr<Mesh> createSphereMesh(float radius, int rings, int segments, gl
     return make_unique<Mesh>(vertices, indices);
 }
 
+class BezierCurve
+{
+private:
+    std::vector<float> coefficients;
+    std::vector<float> derivative_coefficients;
+    std::vector<glm::vec3> points;
+    std::vector<glm::vec3> derivative_points;
+
+    void generate_coefficients()
+    {
+        uint32_t n = points.size() - 1;
+        for (uint32_t i = 0; i <= n; i++)
+        {
+            coefficients.push_back(binom(n, i));
+            if (i <= n - 1)
+            {
+                derivative_coefficients.push_back(binom(n - 1, i));
+                derivative_points.push_back(points[i + 1] - points[i]);
+            }
+        }
+    }
+
+    uint64_t binom(uint32_t n, uint32_t k)
+    {
+        return fact(n) / (fact(k) * fact(n - k));
+    }
+
+    uint64_t fact(uint32_t n)
+    {
+        uint64_t factorial = 1;
+        for (int i = 1; i <= n; ++i)
+        {
+            factorial *= i;
+        }
+        return factorial;
+    }
+
+    float power_at(float t, int n, int i)
+    {
+        if (i == 0)
+            return std::pow(1.0 - t, n - i);
+        if (i == n)
+            return std::pow(t, i);
+        return std::pow(1.0 - t, n - i) * std::pow(t, i);
+    }
+
+public:
+    BezierCurve(std::vector<glm::vec3> points)
+    {
+        this->points = points;
+        this->generate_coefficients();
+    }
+
+    glm::vec3 value_at(float t)
+    {
+        glm::vec3 sum = {};
+        uint32_t n = points.size() - 1;
+        for (size_t i = 0; i <= n; i++)
+        {
+            float w = coefficients[i] * power_at(t, n, i);
+            sum += w * points[i];
+        }
+        return sum;
+    }
+
+    glm::vec3 tanget_at(float t)
+    {
+        glm::vec3 sum = {};
+        uint32_t n = points.size() - 1;
+        for (size_t i = 0; i <= n - 1; i++)
+        {
+            float w = derivative_coefficients[i] * power_at(t, n - 1, i);
+            sum += w * derivative_points[i];
+        }
+        return float(n) * sum;
+    }
+};
+
+std::unique_ptr<Mesh> createBezierMesh(std::unique_ptr<BezierCurve> curve, glm::vec3 up, float radius, int resolution, int segments, glm::vec3 color)
+{
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    vertices.push_back({curve->value_at(1.0), color});
+    vertices.push_back({curve->value_at(0.0), color});
+
+    int prev_ring = 0;
+    int curr_ring = 2;
+    for (int r = 0; r <= resolution; r++)
+    {
+        bool cap = r == 0 || r == resolution;
+        bool top_cap = r == resolution;
+        float f = 1.0 - (float(r) / resolution);
+        glm::vec3 p = curve->value_at(f);
+        glm::vec3 t = curve->tanget_at(f);
+        glm::vec3 bn = glm::normalize(glm::cross(t, up)) * radius;
+        for (int s = 0; s < segments; s++)
+        {
+            float phi = glm::two_pi<float>() * s / segments;
+            glm::vec3 n = glm::mat3(glm::rotate(glm::mat4(1.0), phi, t)) * bn;
+            glm::vec3 v = p + n;
+            vertices.push_back({v, color});
+
+            if (s == 0)
+                continue;
+
+            if (cap)
+            {
+                indices.push_back(curr_ring + s - 1);
+                if (top_cap)
+                    indices.push_back(1);
+                indices.push_back(curr_ring + s);
+                if (!top_cap)
+                    indices.push_back(0);
+            }
+            if (r > 0)
+            {
+                indices.push_back(curr_ring + s - 1);
+                indices.push_back(curr_ring + s);
+                indices.push_back(prev_ring + s - 1);
+
+                indices.push_back(prev_ring + s);
+                indices.push_back(prev_ring + s - 1);
+                indices.push_back(curr_ring + s);
+            }
+        }
+        if (cap)
+        {
+            indices.push_back(curr_ring + segments - 1);
+            if (top_cap)
+                indices.push_back(1);
+            indices.push_back(curr_ring);
+            if (!top_cap)
+                indices.push_back(0);
+        }
+        if (r > 0)
+        {
+            indices.push_back(curr_ring + segments - 1);
+            indices.push_back(curr_ring);
+            indices.push_back(prev_ring + segments - 1);
+
+            indices.push_back(prev_ring);
+            indices.push_back(prev_ring + segments - 1);
+            indices.push_back(curr_ring);
+        }
+        prev_ring = curr_ring;
+        curr_ring += segments;
+    }
+
+    return make_unique<Mesh>(vertices, indices);
+}
+
+std::vector<std::unique_ptr<MeshInstance>> createScene()
+{
+    std::shared_ptr<Mesh> cornell_mesh = std::make_shared<Mesh>(createCornellVertices(3, 3, 3), cornell_indices);
+    std::shared_ptr<Mesh> cube_mesh = std::make_shared<Mesh>(createCubeVertices(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}), cube_indices);
+    std::shared_ptr<Mesh> cylinder_mesh(createCylinderMesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> sphere_mesh(createSphereMesh(0.24, 8, 18, {1.0, 1.0, 1.0}));
+    std::unique_ptr<BezierCurve> bezeier_curve(new BezierCurve({{-0.3f, 0.6f, 0.0f},
+                                                                {0.0f, 1.6f, 0.0f},
+                                                                {1.4f, 0.3f, 0.0f},
+                                                                {0.0f, 0.3f, 0.0f},
+                                                                {0.0f, -0.5f, 0.0f}}));
+    std::shared_ptr<Mesh> bezier_mesh(createBezierMesh(std::move(bezeier_curve), {0, 0, -1}, 0.2, 42, 18, {1.0, 1.0, 1.0}));
+
+    std::vector<std::unique_ptr<MeshInstance>> instances;
+    MeshInstance *cornell_instance = new MeshInstance(cornell_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
+
+    MeshInstance *cube_instance = new MeshInstance(cube_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(cube_instance));
+    cube_instance->set_uniforms({
+        .color = {0.7, 0.1, 0.2, 1.0},
+        .modelMatrix =
+            glm::rotate(
+                glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
+                glm::radians(45.0f), {0, 1, 0}),
+    });
+
+    MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(cylinder_instance));
+    cylinder_instance->set_uniforms({
+        .color = {0.2, 0.8, 0.4, 1.0},
+        .modelMatrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
+    });
+
+    MeshInstance *bezier_instance = new MeshInstance(bezier_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(bezier_instance));
+    bezier_instance->set_uniforms({
+        .color = {0.2, 0.8, 0.4, 1.0},
+        .modelMatrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
+    });
+
+    MeshInstance *sphere_instance = new MeshInstance(sphere_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance));
+    sphere_instance->set_uniforms({
+        .color = {0.4, 0.3, 0.7, 1.0},
+        .modelMatrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
+    });
+
+    return instances;
+}
+
 #pragma endregion
 
 /* --------------------------------------------- */
@@ -1203,7 +1464,7 @@ int main(int argc, char **argv)
         VKL_EXIT_WITH_ERROR("Failed to init framework");
     }
 
-    std::string init_camera_filepath = "assets/settings/camera_front_right.ini";
+    std::string init_camera_filepath = "assets/settings/camera_front.ini";
     if (cmdline_args.init_camera)
         init_camera_filepath = cmdline_args.init_camera_filepath;
     std::string init_renderer_filepath = "assets/settings/renderer_standard.ini";
@@ -1211,11 +1472,17 @@ int main(int argc, char **argv)
         init_renderer_filepath = cmdline_args.init_renderer_filepath;
 
     std::shared_ptr<Camera> camera(createCamera(init_camera_filepath, window));
+    trash.push_back(camera);
     std::shared_ptr<Input> input = Input::init(window);
     std::shared_ptr<OrbitControls> controls(new OrbitControls(camera));
-    std::unique_ptr<PipelineMatrixManager> pipelines = createPipelineManager(init_renderer_filepath);
+    std::shared_ptr<PipelineMatrixManager> pipelines = createPipelineManager(init_renderer_filepath);
+    trash.push_back(pipelines);
 
-    VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 8, 16);
+    // All instances share a uniform buffer
+    std::shared_ptr<SharedUniformBuffer> uniform_buffer(new SharedUniformBuffer(vk_physical_device, sizeof(MeshInstanceUniformBlock), 20));
+    trash.push_back(uniform_buffer);
+
+    VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 20, 20 * 2);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
         vk_device,
         {{
@@ -1227,29 +1494,17 @@ int main(int argc, char **argv)
              .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
          }});
 
-    VkDescriptorSet vk_descriptor_set_1 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
-    VkDescriptorSet vk_descriptor_set_2 = createVkDescriptorSet(vk_device, vk_descriptor_pool, vk_descriptor_set_layout);
+    auto mesh_instances = createScene();
+    for (size_t i = 0; i < mesh_instances.size(); i++)
+    {
+        mesh_instances[i]->init_uniforms(vk_device, vk_descriptor_pool, vk_descriptor_set_layout, 1, uniform_buffer->buffer, uniform_buffer->slot(i));
+        trash.push_back(mesh_instances[i]->mesh);
 
-    std::shared_ptr<Mesh> cornell_mesh = std::make_shared<Mesh>(createCornellVertices(3, 3, 3), cornell_indices);
-    std::shared_ptr<Mesh> cube_mesh = std::make_shared<Mesh>(createCubeVertices(1.3, 2, 1.3, {1.0, 1.0, 1.0}), cube_indices);
-    std::shared_ptr<Mesh> cylinder_mesh(createCylinderMesh(0.2, 2, 18, {1.0, 1.0, 1.0}));
-    std::shared_ptr<Mesh> sphere_mesh(createSphereMesh(0.24, 8, 18, {1.0, 1.0, 1.0}));
-
-    std::unique_ptr<MeshInstance> cornell_instance = std::make_unique<MeshInstance>(cornell_mesh);
-    cornell_instance->set_uniforms({
-        .color = {1.0, 1.0, 1.0, 1.0},
-        .modelMatrix = glm::mat4(1.0),
-    });
-    cornell_instance->bind_uniforms(vk_device, vk_descriptor_set_1, 0);
-    std::unique_ptr<MeshInstance> cube_instance = std::make_unique<MeshInstance>(sphere_mesh);
-    cube_instance->set_uniforms({
-        .color = {0.7, 0.1, 0.2, 1.0},
-        .modelMatrix = glm::rotate(glm::mat4(1.0), glm::radians(45.0f), {0, 1, 0}),
-    });
-    cube_instance->bind_uniforms(vk_device, vk_descriptor_set_2, 0);
-
-    camera->bind_uniforms(vk_device, vk_descriptor_set_1, 1);
-    camera->bind_uniforms(vk_device, vk_descriptor_set_2, 1);
+        // vklCreateGraphicsPipeline does not allow binding multiple descriptor sets simultaneously
+        // thus it's required to hook the scene-static uniforms into every descriptor set
+        // See: https://github.com/cg-tuwien/VulkanLaunchpad/issues/30
+        camera->init_uniforms(vk_device, mesh_instances[i]->get_descriptor_set(), 0);
+    }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
@@ -1274,15 +1529,13 @@ int main(int argc, char **argv)
         VkPipeline vk_selected_pipeline = pipelines->selected();
         vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
         VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
-        VkDeviceSize vk_vertex_offset = 0;
 
-        vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_1, 0, nullptr);
-        cornell_instance->mesh->bind(vk_cmd_buffer);
-        cornell_instance->mesh->draw(vk_cmd_buffer);
-
-        vkCmdBindDescriptorSets(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 0, 1, &vk_descriptor_set_2, 0, nullptr);
-        cube_instance->mesh->bind(vk_cmd_buffer);
-        cube_instance->mesh->draw(vk_cmd_buffer);
+        for (auto &&i : mesh_instances)
+        {
+            i->bind_uniforms(vk_cmd_buffer, vk_pipeline_layout);
+            i->mesh->bind(vk_cmd_buffer);
+            i->mesh->draw(vk_cmd_buffer);
+        }
 
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
@@ -1308,14 +1561,10 @@ int main(int argc, char **argv)
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
-    camera->destory();
-    cube_instance->destroy();
-    cube_mesh->destroy();
-    cylinder_mesh->destroy();
-    sphere_mesh->destroy();
-    cornell_instance->destroy();
-    cornell_mesh->destroy();
-    pipelines->destory();
+    for (auto &&i : trash)
+    {
+        i->destroy();
+    }
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
     vkDestroyDevice(vk_device, nullptr);

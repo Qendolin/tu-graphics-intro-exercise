@@ -5,12 +5,12 @@ layout(location = 1) in vec3 in_color;
 
 layout(location = 0) out vec4 out_color;
 
-layout(binding = 0) uniform ModelUniforms
+layout(set = 0, binding = 1) uniform ModelUniforms
 {
 	vec4 u_color;
 	mat4 u_model_mat;
 };
-layout(binding = 1) uniform CameraUniforms
+layout(set = 0, binding = 0) uniform CameraUniforms
 {
 	mat4 u_view_projection_mat;
 };
