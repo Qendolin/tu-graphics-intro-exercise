@@ -35,7 +35,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
     std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> cylinder_mesh(create_cylinder_mesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
-    std::shared_ptr<Mesh> sphere_mesh(create_sphere_mesh(0.24, 8, 18, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> sphere_mesh(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
     std::unique_ptr<BezierCurve> bezeier_curve(new BezierCurve({{-0.3f, 0.6f, 0.0f},
                                                                 {0.0f, 1.6f, 0.0f},
                                                                 {1.4f, 0.3f, 0.0f},
