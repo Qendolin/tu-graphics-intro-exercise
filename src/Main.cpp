@@ -1348,7 +1348,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     std::shared_ptr<Mesh> cornell_mesh = std::make_shared<Mesh>(createCornellVertices(3, 3, 3), cornell_indices);
     std::shared_ptr<Mesh> cube_mesh = std::make_shared<Mesh>(createCubeVertices(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}), cube_indices);
     std::shared_ptr<Mesh> cylinder_mesh(createCylinderMesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
-    std::shared_ptr<Mesh> sphere_mesh(createSphereMesh(0.24, 8, 18, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> sphere_mesh(createSphereMesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
     std::unique_ptr<BezierCurve> bezeier_curve(new BezierCurve({{-0.3f, 0.6f, 0.0f},
                                                                 {0.0f, 1.6f, 0.0f},
                                                                 {1.4f, 0.3f, 0.0f},
