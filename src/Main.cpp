@@ -1343,6 +1343,63 @@ std::unique_ptr<Mesh> createBezierMesh(std::unique_ptr<BezierCurve> curve, glm::
     return make_unique<Mesh>(vertices, indices);
 }
 
+std::unique_ptr<Mesh> createTorusMesh(float majorRadius, float minorRadius, int rings, int segments, glm::vec3 color)
+{
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    int prev_ring = 0;
+    int curr_ring = 0;
+    int count = rings * segments;
+    for (int r = 0; r <= rings; r++)
+    {
+        float theta = glm::two_pi<float>() * r / rings;
+        glm::mat4 mat = glm::translate(
+            glm::rotate(glm::mat4(1.0), theta, {0, 0, 1}),
+            {0, majorRadius, 0});
+        for (int s = 0; s < segments; s++)
+        {
+            if (r < rings)
+            {
+                float phi = glm::two_pi<float>() * s / segments;
+                glm::vec4 n = {
+                    0.0,
+                    glm::cos(phi) * minorRadius,
+                    glm::sin(phi) * minorRadius,
+                    1.0,
+                };
+                glm::vec3 v = mat * n;
+                vertices.push_back({v, color});
+            }
+
+            if (s > 0)
+            {
+                indices.push_back((curr_ring + s - 1 + count) % count);
+                indices.push_back((curr_ring + s + count) % count);
+                indices.push_back((prev_ring + s - 1 + count) % count);
+
+                indices.push_back((prev_ring + s + count) % count);
+                indices.push_back((prev_ring + s - 1 + count) % count);
+                indices.push_back((curr_ring + s + count) % count);
+            }
+        }
+        if (r > 0)
+        {
+            indices.push_back((curr_ring + segments - 1 + count) % count);
+            indices.push_back((curr_ring + count) % count);
+            indices.push_back((prev_ring + segments - 1 + count) % count);
+
+            indices.push_back((prev_ring + count) % count);
+            indices.push_back((prev_ring + segments - 1 + count) % count);
+            indices.push_back((curr_ring + count) % count);
+        }
+        prev_ring = curr_ring;
+        curr_ring += segments;
+    }
+
+    return make_unique<Mesh>(vertices, indices);
+}
+
 std::vector<std::unique_ptr<MeshInstance>> createScene()
 {
     std::shared_ptr<Mesh> cornell_mesh = std::make_shared<Mesh>(createCornellVertices(3, 3, 3), cornell_indices);
@@ -1355,6 +1412,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
                                                                 {0.0f, 0.3f, 0.0f},
                                                                 {0.0f, -0.5f, 0.0f}}));
     std::shared_ptr<Mesh> bezier_mesh(createBezierMesh(std::move(bezeier_curve), {0, 0, -1}, 0.2, 42, 18, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> torus_mesh(createTorusMesh(1.1, 0.1, 32, 8, {1.0, 1.0, 1.0}));
 
     std::vector<std::unique_ptr<MeshInstance>> instances;
     MeshInstance *cornell_instance = new MeshInstance(cornell_mesh);
@@ -1389,6 +1447,15 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     sphere_instance->set_uniforms({
         .color = {0.4, 0.3, 0.7, 1.0},
         .modelMatrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
+    });
+
+    MeshInstance *torus_instance = new MeshInstance(torus_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(torus_instance));
+    torus_instance->set_uniforms({
+        .color = {1.0, 0.3, 0.0, 1.0},
+        .modelMatrix = glm::rotate(
+            glm::scale(glm::mat4(1.0), {1.0, 1.5, 1.0}),
+            glm::radians(45.0f), {1, 0, 0}),
     });
 
     return instances;
