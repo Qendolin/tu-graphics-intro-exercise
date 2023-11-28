@@ -135,18 +135,146 @@ glm::vec3 BezierCurve::tanget_at(float t)
 }
 #pragma endregion
 
-std::unique_ptr<Mesh> create_cylinder_mesh(float radius, float height, int segments, glm::vec3 color)
+#pragma region MeshBuilder
+class MeshBuilder
 {
+private:
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
+	std::vector<glm::mat4> transforms = {glm::mat4(1.0)};
+	bool reverse_winding = false;
 
-	vertices.push_back({{0, -height / 2, 0}, color});
-	vertices.push_back({{0, height / 2, 0}, color});
+public:
+	class Cycle
+	{
+	private:
+		uint32_t start = -1;
+		uint32_t length = -1;
 
-	const int bot_start = 2;
-	const int bot_end = 2 + segments - 1;
-	const int top_start = 2 + segments;
-	const int top_end = 2 + segments * 2 - 1;
+	public:
+		Cycle() {}
+		Cycle(uint32_t start, uint32_t len) : start(start), length(len) {}
+
+		uint32_t rel(int i)
+		{
+			if (length <= 0)
+				return i;
+			return start + ((i % length) + length) % length;
+		}
+	};
+
+	MeshBuilder()
+	{
+	}
+
+	std::unique_ptr<Mesh> build()
+	{
+		return make_unique<Mesh>(vertices, indices);
+	}
+
+	uint32_t index()
+	{
+		return vertices.size() - 1;
+	}
+
+	void transform(glm::mat4 m)
+	{
+		transforms.back() = m * transforms.back();
+	}
+
+	void transform(glm::mat3 m)
+	{
+		transforms.back() = transforms.back() * glm::mat4(m);
+	}
+
+	void push_transform()
+	{
+		transforms.push_back(transforms.back());
+	}
+
+	void pop_transform()
+	{
+		transforms.pop_back();
+	}
+
+	void vertex(Vertex v)
+	{
+		v.position = transforms.back() * glm::vec4(v.position, 1.0);
+		v.normal = glm::mat3(transforms.back()) * v.normal;
+		vertices.push_back(v);
+	}
+
+	// A--B
+	// | /
+	// C
+	void tri(uint32_t a, uint32_t b, uint32_t c)
+	{
+		if (reverse_winding)
+		{
+			indices.push_back(a);
+			indices.push_back(c);
+			indices.push_back(b);
+		}
+		else
+		{
+			indices.push_back(a);
+			indices.push_back(b);
+			indices.push_back(c);
+		}
+	}
+
+	//	A--B
+	//	| /|
+	//	C--D
+	void quad(uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+	{
+		tri(a, b, c);
+		tri(d, c, b);
+	}
+
+	Cycle start_cycle(uint32_t length)
+	{
+		return Cycle(vertices.size(), length);
+	}
+
+	void winding(bool reverse)
+	{
+		reverse_winding = reverse;
+	}
+};
+#pragma endregion
+
+void append_circle_cap(MeshBuilder &builder, float radius, int segments, glm::vec3 pos, glm::vec3 color, glm::vec3 normal)
+{
+	builder.vertex({pos, color, normal});
+	int center_index = builder.index();
+	auto cycle = builder.start_cycle(segments);
+	for (int s = 0; s < segments; s++)
+	{
+		float phi = glm::two_pi<float>() * s / segments;
+		glm::vec3 spoke = {
+			glm::cos(phi),
+			0.0,
+			glm::sin(phi),
+		};
+		glm::vec3 v = pos + radius * spoke;
+
+		builder.vertex({v, color, normal});
+		builder.tri(center_index, cycle.rel(s), cycle.rel(s + 1));
+	}
+}
+
+std::unique_ptr<Mesh> create_cylinder_mesh(float radius, float height, int segments, glm::vec3 color)
+{
+	std::unique_ptr<MeshBuilder> builder = std::make_unique<MeshBuilder>();
+
+	append_circle_cap(*builder, radius, segments, {0, -height / 2, 0}, color, {0, -1, 0});
+	builder->winding(true);
+	append_circle_cap(*builder, radius, segments, {0, height / 2, 0}, color, {0, 1, 0});
+	builder->winding(false);
+
+	MeshBuilder::Cycle bot_cycle = builder->start_cycle(segments);
+	MeshBuilder::Cycle top_cycle;
 
 	for (int half = 0; half < 2; half++)
 	{
@@ -154,203 +282,119 @@ std::unique_ptr<Mesh> create_cylinder_mesh(float radius, float height, int segme
 		for (int s = 0; s < segments; s++)
 		{
 			float phi = glm::two_pi<float>() * s / segments;
-			glm::vec3 v = {
-				glm::cos(phi) * radius,
-				top ? height / 2 : -height / 2,
-				glm::sin(phi) * radius,
+			glm::vec3 n = {
+				glm::cos(phi),
+				0.0,
+				glm::sin(phi),
 			};
+			glm::vec3 v = radius * n;
+			v.y = top ? height / 2 : -height / 2;
 
-			vertices.push_back({v, color});
+			builder->vertex({v, color, n});
 
-			if (top && s > 0)
-			{
-				indices.push_back(0);
-				indices.push_back(bot_start + s - 1);
-				indices.push_back(bot_start + s);
-
-				indices.push_back(top_start + s - 1);
-				indices.push_back(bot_start + s);
-				indices.push_back(bot_start + s - 1);
-
-				indices.push_back(1);
-				indices.push_back(top_start + s);
-				indices.push_back(top_start + s - 1);
-
-				indices.push_back(bot_start + s);
-				indices.push_back(top_start + s - 1);
-				indices.push_back(top_start + s);
-			}
+			if (top)
+				builder->quad(top_cycle.rel(s), top_cycle.rel(s + 1), bot_cycle.rel(s), bot_cycle.rel(s + 1));
 		}
+		if (!top)
+			top_cycle = builder->start_cycle(segments);
 	}
 
-	indices.push_back(0);
-	indices.push_back(bot_end);
-	indices.push_back(bot_start);
-
-	indices.push_back(top_end);
-	indices.push_back(bot_start);
-	indices.push_back(bot_end);
-
-	indices.push_back(1);
-	indices.push_back(top_start);
-	indices.push_back(top_end);
-
-	indices.push_back(bot_start);
-	indices.push_back(top_end);
-	indices.push_back(top_start);
-
-	return make_unique<Mesh>(vertices, indices);
+	return builder->build();
 }
 
 std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, glm::vec3 color)
 {
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
+	std::unique_ptr<MeshBuilder> builder = std::make_unique<MeshBuilder>();
 
-	vertices.push_back({{0, -radius, 0}, color});
-	vertices.push_back({{0, radius, 0}, color});
+	builder->vertex({{0, -radius, 0}, color, {0, -1, 0}});
+	uint32_t bot_cap_index = builder->index();
+	builder->vertex({{0, radius, 0}, color, {0, 1, 0}});
+	uint32_t top_cap_index = builder->index();
 
-	int prev_ring = 0;
-	int curr_ring = 2;
-
+	MeshBuilder::Cycle prev_cycle;
 	for (int r = 1; r < rings; r++)
 	{
 		bool cap = r == 1 || r == rings - 1;
 		bool top_cap = r == rings - 1;
 		float theta = glm::pi<float>() * r / rings;
+		auto curr_cycle = builder->start_cycle(segments);
 		for (int s = 0; s < segments; s++)
 		{
 			float phi = glm::two_pi<float>() * s / segments;
 
-			glm::vec3 v = {
-				radius * glm::sin(theta) * glm::cos(phi),
-				radius * -glm::cos(theta),
-				radius * glm::sin(theta) * glm::sin(phi),
+			glm::vec3 n = {
+				glm::sin(theta) * glm::cos(phi),
+				-glm::cos(theta),
+				glm::sin(theta) * glm::sin(phi),
 			};
+			glm::vec3 v = radius * n;
 
-			vertices.push_back({v, color});
-
-			if (s == 0)
-				continue;
+			builder->vertex({v, color, n});
 
 			if (cap)
 			{
-				indices.push_back(curr_ring + s - 1);
 				if (top_cap)
-					indices.push_back(1);
-				indices.push_back(curr_ring + s);
-				if (!top_cap)
-					indices.push_back(0);
+					builder->tri(top_cap_index, curr_cycle.rel(s + 1), curr_cycle.rel(s));
+				else
+					builder->tri(bot_cap_index, curr_cycle.rel(s), curr_cycle.rel(s + 1));
 			}
 			if (r > 1)
 			{
-				indices.push_back(curr_ring + s - 1);
-				indices.push_back(curr_ring + s);
-				indices.push_back(prev_ring + s - 1);
-
-				indices.push_back(prev_ring + s);
-				indices.push_back(prev_ring + s - 1);
-				indices.push_back(curr_ring + s);
+				builder->quad(curr_cycle.rel(s), curr_cycle.rel(s + 1), prev_cycle.rel(s), prev_cycle.rel(s + 1));
 			}
 		}
-		if (cap)
-		{
-			indices.push_back(curr_ring + segments - 1);
-			if (top_cap)
-				indices.push_back(1);
-			indices.push_back(curr_ring);
-			if (!top_cap)
-				indices.push_back(0);
-		}
-		if (r > 1)
-		{
-			indices.push_back(curr_ring + segments - 1);
-			indices.push_back(curr_ring);
-			indices.push_back(prev_ring + segments - 1);
-
-			indices.push_back(prev_ring);
-			indices.push_back(prev_ring + segments - 1);
-			indices.push_back(curr_ring);
-		}
-		prev_ring = curr_ring;
-		curr_ring += segments;
+		prev_cycle = curr_cycle;
 	}
 
-	return make_unique<Mesh>(vertices, indices);
+	return builder->build();
 }
 
 std::unique_ptr<Mesh> create_bezier_mesh(std::unique_ptr<BezierCurve> curve, glm::vec3 up, float radius, int resolution, int segments, glm::vec3 color)
 {
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
+	std::unique_ptr<MeshBuilder> builder = std::make_unique<MeshBuilder>();
 
-	vertices.push_back({curve->value_at(1.0), color});
-	vertices.push_back({curve->value_at(0.0), color});
+	for (int cap = 0; cap <= 1; cap++)
+	{
+		float f = float(cap);
+		builder->push_transform();
+		glm::vec3 tan = glm::normalize(curve->tanget_at(f));
+		glm::vec3 bitan = glm::normalize(glm::cross(tan, up));
+		glm::vec3 norm = glm::cross(bitan, tan);
+		glm::mat4 cap_mat = glm::translate(glm::mat4(1.0), curve->value_at(f)) * glm::mat4(glm::mat3(bitan, tan, norm));
+		builder->transform(cap_mat);
+		builder->winding(cap == 1);
+		append_circle_cap(*builder, radius, segments, {0, 0, 0}, color, {0, cap == 0 ? -1 : 1, 0});
+		builder->pop_transform();
+	}
+	builder->winding(false);
 
-	int prev_ring = 0;
-	int curr_ring = 2;
+	MeshBuilder::Cycle prev_cycle;
 	for (int r = 0; r <= resolution; r++)
 	{
 		bool cap = r == 0 || r == resolution;
 		bool top_cap = r == resolution;
-		float f = 1.0 - (float(r) / resolution);
+		float f = float(r) / resolution;
 		glm::vec3 p = curve->value_at(f);
-		glm::vec3 t = curve->tanget_at(f);
-		glm::vec3 bn = glm::normalize(glm::cross(t, up)) * radius;
+		glm::vec3 tan = glm::normalize(curve->tanget_at(f));
+		glm::vec3 bitan = glm::normalize(glm::cross(tan, up));
+		auto curr_cycle = builder->start_cycle(segments);
+
 		for (int s = 0; s < segments; s++)
 		{
 			float phi = glm::two_pi<float>() * s / segments;
-			glm::vec3 n = glm::mat3(glm::rotate(glm::mat4(1.0), phi, t)) * bn;
-			glm::vec3 v = p + n;
-			vertices.push_back({v, color});
+			glm::vec3 n = glm::mat3(glm::rotate(glm::mat4(1.0), phi, tan)) * bitan;
+			glm::vec3 v = p + n * radius;
+			builder->vertex({v, color, n});
 
-			if (s == 0)
-				continue;
-
-			if (cap)
-			{
-				indices.push_back(curr_ring + s - 1);
-				if (top_cap)
-					indices.push_back(1);
-				indices.push_back(curr_ring + s);
-				if (!top_cap)
-					indices.push_back(0);
-			}
 			if (r > 0)
 			{
-				indices.push_back(curr_ring + s - 1);
-				indices.push_back(curr_ring + s);
-				indices.push_back(prev_ring + s - 1);
-
-				indices.push_back(prev_ring + s);
-				indices.push_back(prev_ring + s - 1);
-				indices.push_back(curr_ring + s);
+				builder->quad(prev_cycle.rel(s), prev_cycle.rel(s + 1), curr_cycle.rel(s), curr_cycle.rel(s + 1));
 			}
 		}
-		if (cap)
-		{
-			indices.push_back(curr_ring + segments - 1);
-			if (top_cap)
-				indices.push_back(1);
-			indices.push_back(curr_ring);
-			if (!top_cap)
-				indices.push_back(0);
-		}
-		if (r > 0)
-		{
-			indices.push_back(curr_ring + segments - 1);
-			indices.push_back(curr_ring);
-			indices.push_back(prev_ring + segments - 1);
-
-			indices.push_back(prev_ring);
-			indices.push_back(prev_ring + segments - 1);
-			indices.push_back(curr_ring);
-		}
-		prev_ring = curr_ring;
-		curr_ring += segments;
+		prev_cycle = curr_cycle;
 	}
 
-	return make_unique<Mesh>(vertices, indices);
+	return builder->build();
 }
 
 glm::vec3 cube_vertex_positions[]{
@@ -364,25 +408,48 @@ glm::vec3 cube_vertex_positions[]{
 	{0.5, 0.5, -0.5},	// 7
 };
 
-std::vector<uint32_t> cube_indices = {
-	// Top
-	7, 6, 2,
-	2, 3, 7,
-	// Bottom
-	0, 4, 5,
-	5, 1, 0,
-	// Left
-	0, 2, 6,
-	6, 4, 0,
-	// Right
-	7, 3, 1,
-	1, 5, 7,
-	// Front
-	3, 2, 0,
-	0, 1, 3,
-	// Back
-	4, 6, 7,
-	7, 5, 4};
+glm::vec3 cube_face_normals[]{
+	{0.0, 1.0, 0.0},  // top
+	{0.0, -1.0, 0.0}, // bottom
+	{-1.0, 0.0, 0.0}, // left
+	{1.0, 0.0, 0.0},  // right
+	{0.0, 0.0, 1.0},  // front
+	{0.0, 0.0, -1.0}  // back
+};
+
+struct CubeFace
+{
+	uint32_t face;
+	uint32_t verts[4];
+};
+
+std::vector<CubeFace>
+	cube_faces = {
+		{
+			0, // Top
+			{7, 6, 2, 3},
+		},
+		{
+			1, // Bottom
+			{0, 4, 5, 1},
+		},
+		{
+			2, // Left
+			{0, 2, 6, 4},
+		},
+		{
+			3, // Right
+			{7, 3, 1, 5},
+		},
+		{
+			4, // Front
+			{3, 2, 0, 1},
+		},
+		{
+			5, // Back
+			{4, 6, 7, 5},
+		},
+};
 
 std::unique_ptr<Mesh> create_cube_mesh(float width, float height, float depth, glm::vec3 color)
 {
@@ -396,14 +463,22 @@ std::unique_ptr<Mesh> create_cube_mesh(float width, float height, float depth, g
 		positions[i] = glm::vec3(scale * glm::vec4(positions[i], 1.0f));
 	}
 
-	auto vertices = std::vector<Vertex>(positions.size());
-	for (size_t i = 0; i < vertices.size(); i++)
+	auto vertices = std::vector<Vertex>(cube_faces.size() * 4);
+	auto indices = std::vector<uint32_t>();
+	indices.reserve(cube_faces.size() * 6);
+	uint32_t index = 0;
+	for (size_t i = 0; i < cube_faces.size(); i++)
 	{
-		vertices[i] = {positions[i], color};
+		auto verts = cube_faces[i].verts;
+		vertices[i * 4 + 0] = {positions[verts[0]], color, cube_face_normals[i]};
+		vertices[i * 4 + 1] = {positions[verts[1]], color, cube_face_normals[i]};
+		vertices[i * 4 + 2] = {positions[verts[2]], color, cube_face_normals[i]};
+		vertices[i * 4 + 3] = {positions[verts[3]], color, cube_face_normals[i]};
+		indices.insert(indices.end(), {index + 0, index + 1, index + 2, index + 2, index + 3, index + 0});
+		index += 4;
 	}
 
-	return std::make_unique<Mesh>(vertices, cube_indices);
-	;
+	return std::make_unique<Mesh>(vertices, indices);
 }
 
 std::vector<uint32_t> cornell_indices = {
@@ -429,6 +504,14 @@ glm::vec3 cornell_vertex_colors[]{
 	{1.0, 0.0, 0.0},	// Left
 	{0.0, 1.0, 0.0},	// Right
 	{0.76, 0.74, 0.68}	// Back
+};
+
+glm::vec3 cornell_vertex_normals[]{
+	{0.0, -1.0, 0.0}, // top
+	{0.0, 1.0, 0.0},  // bottom
+	{1.0, 0.0, 0.0},  // left
+	{-1.0, 0.0, 0.0}, // right
+	{0.0, 0.0, 1.0}	  // back
 };
 
 uint32_t cornell_position_swizzle[]{
@@ -463,6 +546,7 @@ std::unique_ptr<Mesh> create_cornell_mesh(float width, float height, float depth
 			size_t i = face * 4 + v;
 			vertices[i].position = positions[cornell_position_swizzle[i]];
 			vertices[i].color = cornell_vertex_colors[face];
+			vertices[i].normal = cornell_vertex_normals[face];
 		}
 	}
 

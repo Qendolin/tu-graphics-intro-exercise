@@ -27,6 +27,12 @@ VkPipeline createVkPipeline(PipelineParams &params)
 				.binding = 0,
 				.format = VK_FORMAT_R32G32B32_SFLOAT,
 				.offset = offsetof(Vertex, color),
+			},
+			{
+				.location = 2,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32B32_SFLOAT,
+				.offset = offsetof(Vertex, normal),
 			}},
 		.polygonDrawMode = params.polygon_mode,
 		.triangleCullingMode = params.culling_mode,

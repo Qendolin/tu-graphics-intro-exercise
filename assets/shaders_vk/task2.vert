@@ -2,6 +2,7 @@
 
 layout(location = 0) in vec3 in_position;
 layout(location = 1) in vec3 in_color;
+layout(location = 2) in vec3 in_normal;
 
 layout(location = 0) out vec4 out_color;
 
@@ -18,5 +19,6 @@ layout(set = 0, binding = 0) uniform CameraUniforms
 void main() {
 	gl_Position = u_view_projection_mat * u_model_mat * vec4(in_position, 1.0);
 	out_color.rgb = in_color.rgb * mix(vec3(1.0), u_color.rgb, u_color.a);
+	out_color.rgb = in_normal * 0.5 + 0.5;
 	out_color.a = 1.0;
 }
