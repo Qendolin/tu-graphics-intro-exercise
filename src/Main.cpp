@@ -75,7 +75,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     sphere_instance_2->set_uniforms({
         .color = {0.7, 0.1, 0.2, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
-        .material_factors = {1.0, 0.1, 4.0, 5.0},
+        .material_factors = {1.0, 0.0, 4.0, 5.0},
     });
 
     MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh);
@@ -99,7 +99,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     sphere_instance_1->set_uniforms({
         .color = {0.4, 0.3, 0.7, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
-        .material_factors = {1.0, 1.0, 1.0, 10.0},
+        .material_factors = {1.0, 1.0, 0.0, 1.0},
     });
 
     return instances;
@@ -224,7 +224,7 @@ int main(int argc, char **argv)
 
     DirectionalLightUniformBlock directional_light = {
         .direction = {0.1, -0.5, -1, 0},
-        .color = {1, 0.8, 0.8, 1.0},
+        .color = {1, 0.8, 0.8, 0.2},
     };
     VkBuffer directional_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(directional_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(directional_light_buffer, &directional_light, sizeof(directional_light));

@@ -146,7 +146,9 @@ VkPipeline PipelineMatrixManager::selected()
 
 std::unique_ptr<PipelineMatrixManager> createPipelineManager(INIReader renderer_reader)
 {
-	auto manager = std::make_unique<PipelineMatrixManager>("gouraud.vert", "gouraud.frag");
+	// auto manager = std::make_unique<PipelineMatrixManager>("flat.vert", "flat.frag");
+	// auto manager = std::make_unique<PipelineMatrixManager>("gouraud.vert", "gouraud.frag");
+	auto manager = std::make_unique<PipelineMatrixManager>("phong.vert", "phong.frag");
 
 	bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
 	if (as_wireframe)
