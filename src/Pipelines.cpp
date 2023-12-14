@@ -53,6 +53,18 @@ VkPipeline createVkPipeline(PipelineParams &params)
 								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 								 .descriptorCount = 1,
 								 .stageFlags = VK_SHADER_STAGE_ALL,
+							 },
+							 {
+								 .binding = 3,
+								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+								 .descriptorCount = 1,
+								 .stageFlags = VK_SHADER_STAGE_ALL,
+							 },
+							 {
+								 .binding = 4,
+								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+								 .descriptorCount = 1,
+								 .stageFlags = VK_SHADER_STAGE_ALL,
 							 }},
 	};
 	return vklCreateGraphicsPipeline(graphics_pipeline_config);
@@ -134,7 +146,7 @@ VkPipeline PipelineMatrixManager::selected()
 
 std::unique_ptr<PipelineMatrixManager> createPipelineManager(INIReader renderer_reader)
 {
-	auto manager = std::make_unique<PipelineMatrixManager>("task2.vert", "task2.frag");
+	auto manager = std::make_unique<PipelineMatrixManager>("gouraud.vert", "gouraud.frag");
 
 	bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
 	if (as_wireframe)

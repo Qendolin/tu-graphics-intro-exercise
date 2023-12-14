@@ -15,6 +15,7 @@
 struct CameraUniformBlock
 {
 	glm::mat4 view_projection_matrix;
+	glm::vec4 camera_position;
 };
 
 class Camera : public ITrash

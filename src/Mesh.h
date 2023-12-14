@@ -22,6 +22,7 @@ struct MeshInstanceUniformBlock
 {
 	glm::vec4 color;
 	glm::mat4 model_matrix;
+	glm::vec4 material_factors;
 };
 
 class Mesh : public ITrash
@@ -46,6 +47,7 @@ private:
 	MeshInstanceUniformBlock uniform_block = {
 		.color = {1.0, 1.0, 1.0, 1.0},
 		.model_matrix = glm::mat4(1.0),
+		.material_factors = {1.0, 1.0, 1.0, 10.0},
 	};
 	VkBuffer uniform_buffer = VK_NULL_HANDLE;
 	VkDescriptorSet descriptor_set = VK_NULL_HANDLE;

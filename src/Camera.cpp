@@ -26,7 +26,7 @@ void Camera::updateProjection()
 {
 	float aspect = viewportSize.x / viewportSize.y;
 	projectionMatrix = gcgCreatePerspectiveProjectionMatrix(fovRad, aspect, nearPlane, farPlane);
-	set_uniforms({projectionMatrix * viewMatrix});
+	set_uniforms({projectionMatrix * viewMatrix, glm::vec4(position, 1.0)});
 }
 
 void Camera::updateView()
@@ -37,7 +37,7 @@ void Camera::updateView()
 	viewMatrix = glm::rotate(viewMatrix, angles.y, {0, 1, 0});
 	viewMatrix = glm::rotate(viewMatrix, angles.x, {1, 0, 0});
 	viewMatrix = glm::inverse(viewMatrix);
-	set_uniforms({projectionMatrix * viewMatrix});
+	set_uniforms({projectionMatrix * viewMatrix, glm::vec4(position, 1.0)});
 }
 
 void Camera::init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)

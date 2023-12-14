@@ -35,6 +35,19 @@ struct ShaderConstantsUniformBlock
     glm::ivec4 user_input;
 };
 
+struct DirectionalLightUniformBlock
+{
+    glm::vec4 direction;
+    glm::vec4 color;
+};
+
+struct PointLightUniformBlock
+{
+    glm::vec4 position;
+    glm::vec4 color;
+    glm::vec4 attenuation;
+};
+
 std::vector<std::unique_ptr<MeshInstance>> createScene()
 {
     std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
@@ -51,12 +64,18 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     std::vector<std::unique_ptr<MeshInstance>> instances;
     MeshInstance *cornell_instance = new MeshInstance(cornell_mesh);
     instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
+    cornell_instance->set_uniforms({
+        .color = {1.0, 1.0, 1.0, 1.0},
+        .model_matrix = glm::mat4(1.0),
+        .material_factors = {1.0, 1.0, 0.0, 1.0},
+    });
 
     MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh);
     instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_2));
     sphere_instance_2->set_uniforms({
         .color = {0.7, 0.1, 0.2, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
+        .material_factors = {1.0, 0.1, 4.0, 5.0},
     });
 
     MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh);
@@ -64,6 +83,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     cylinder_instance->set_uniforms({
         .color = {0.2, 0.8, 0.4, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
+        .material_factors = {1.0, 1.0, 1.0, 10.0},
     });
 
     MeshInstance *bezier_instance = new MeshInstance(bezier_mesh);
@@ -71,6 +91,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     bezier_instance->set_uniforms({
         .color = {0.2, 0.8, 0.4, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
+        .material_factors = {1.0, 1.0, 1.0, 10.0},
     });
 
     MeshInstance *sphere_instance_1 = new MeshInstance(sphere_mesh);
@@ -78,6 +99,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     sphere_instance_1->set_uniforms({
         .color = {0.4, 0.3, 0.7, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
+        .material_factors = {1.0, 1.0, 1.0, 10.0},
     });
 
     return instances;
@@ -186,11 +208,32 @@ int main(int argc, char **argv)
          {
              .binding = 2,
              .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+         },
+         {
+             .binding = 3,
+             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+         },
+         {
+             .binding = 4,
+             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
          }});
 
     ShaderConstantsUniformBlock shader_constants = {
         .user_input = {renderer_ini_reader.GetBoolean("renderer", "normals", false), 0, 0, 0}};
-    auto shader_constants_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(shader_constants), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    VkBuffer shader_constants_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(shader_constants), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
+    DirectionalLightUniformBlock directional_light = {
+        .direction = {0.1, -0.5, -1, 0},
+        .color = {1, 0.8, 0.8, 1.0},
+    };
+    VkBuffer directional_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(directional_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(directional_light_buffer, &directional_light, sizeof(directional_light));
+    PointLightUniformBlock point_light = {
+        .position = {0, 0, 0, 0},
+        .color = {0.2, 0.2, 1.0, 2.0},
+        .attenuation = {0, 0, 1.0, 0}};
+    VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
 
     auto mesh_instances = createScene();
     for (size_t i = 0; i < mesh_instances.size(); i++)
@@ -203,6 +246,8 @@ int main(int argc, char **argv)
         // See: https://github.com/cg-tuwien/VulkanLaunchpad/issues/30
         camera->init_uniforms(vk_device, mesh_instances[i]->get_descriptor_set(), 0);
         writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 2, shader_constants_buffer, sizeof(shader_constants));
+        writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 3, directional_light_buffer, sizeof(directional_light));
+        writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 4, point_light_buffer, sizeof(point_light));
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
@@ -266,6 +311,8 @@ int main(int argc, char **argv)
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
     vklDestroyHostCoherentBufferAndItsBackingMemory(shader_constants_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(directional_light_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(point_light_buffer);
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
     for (auto &&i : trash)
     {
