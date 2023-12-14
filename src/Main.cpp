@@ -30,10 +30,15 @@ std::vector<std::shared_ptr<ITrash>> trash;
 
 #pragma region hide_this_stuff
 
+struct ShaderConstantsUniformBlock
+{
+    glm::ivec4 user_input;
+};
+
 std::vector<std::unique_ptr<MeshInstance>> createScene()
 {
     std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
-    std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
+    // std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> cylinder_mesh(create_cylinder_mesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> sphere_mesh(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
     std::unique_ptr<BezierCurve> bezeier_curve(new BezierCurve({{-0.3f, 0.6f, 0.0f},
@@ -47,14 +52,11 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     MeshInstance *cornell_instance = new MeshInstance(cornell_mesh);
     instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
 
-    MeshInstance *cube_instance = new MeshInstance(cube_mesh);
-    instances.push_back(std::unique_ptr<MeshInstance>(cube_instance));
-    cube_instance->set_uniforms({
+    MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_2));
+    sphere_instance_2->set_uniforms({
         .color = {0.7, 0.1, 0.2, 1.0},
-        .model_matrix =
-            glm::rotate(
-                glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
-                glm::radians(45.0f), {0, 1, 0}),
+        .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
     });
 
     MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh);
@@ -71,9 +73,9 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
     });
 
-    MeshInstance *sphere_instance = new MeshInstance(sphere_mesh);
-    instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance));
-    sphere_instance->set_uniforms({
+    MeshInstance *sphere_instance_1 = new MeshInstance(sphere_mesh);
+    instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_1));
+    sphere_instance_1->set_uniforms({
         .color = {0.4, 0.3, 0.7, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
     });
@@ -157,12 +159,13 @@ int main(int argc, char **argv)
     std::string init_renderer_filepath = "assets/settings/renderer_standard.ini";
     if (cmdline_args.init_renderer)
         init_renderer_filepath = cmdline_args.init_renderer_filepath;
+    INIReader renderer_ini_reader(init_renderer_filepath);
 
     std::shared_ptr<Camera> camera(createCamera(init_camera_filepath, window));
     trash.push_back(camera);
     std::shared_ptr<Input> input = Input::init(window);
     std::shared_ptr<OrbitControls> controls(new OrbitControls(camera));
-    std::shared_ptr<PipelineMatrixManager> pipelines = createPipelineManager(init_renderer_filepath);
+    std::shared_ptr<PipelineMatrixManager> pipelines = createPipelineManager(renderer_ini_reader);
     trash.push_back(pipelines);
 
     // All instances share a uniform buffer
@@ -179,7 +182,15 @@ int main(int argc, char **argv)
          {
              .binding = 1,
              .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+         },
+         {
+             .binding = 2,
+             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
          }});
+
+    ShaderConstantsUniformBlock shader_constants = {
+        .user_input = {renderer_ini_reader.GetBoolean("renderer", "normals", false), 0, 0, 0}};
+    auto shader_constants_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(shader_constants), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
     auto mesh_instances = createScene();
     for (size_t i = 0; i < mesh_instances.size(); i++)
@@ -191,6 +202,7 @@ int main(int argc, char **argv)
         // thus it's required to hook the scene-static uniforms into every descriptor set
         // See: https://github.com/cg-tuwien/VulkanLaunchpad/issues/30
         camera->init_uniforms(vk_device, mesh_instances[i]->get_descriptor_set(), 0);
+        writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 2, shader_constants_buffer, sizeof(shader_constants));
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
@@ -201,9 +213,15 @@ int main(int argc, char **argv)
         input->update();
         glfwPollEvents();
 
-        if (input->isKeyTap(GLFW_KEY_ESCAPE))
+        if (input->isKeyPress(GLFW_KEY_ESCAPE))
         {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+        if (input->isKeyPress(GLFW_KEY_N))
+        {
+            shader_constants.user_input.x++;
+            shader_constants.user_input.x %= 3;
+            vklCopyDataIntoHostCoherentBuffer(shader_constants_buffer, &shader_constants, sizeof(shader_constants));
         }
 
         pipelines->update();
@@ -247,6 +265,7 @@ int main(int argc, char **argv)
     vkDeviceWaitIdle(vk_device);
     vkDestroyDescriptorSetLayout(vk_device, vk_descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(vk_device, vk_descriptor_pool, nullptr);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(shader_constants_buffer);
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
     for (auto &&i : trash)
     {

@@ -4,6 +4,7 @@
 #include <VulkanLaunchpad.h>
 
 #include "MyUtils.h"
+#include "Utils.h"
 
 #include <vector>
 #include <algorithm>
@@ -48,4 +49,4 @@ public:
 	VkPipeline selected();
 };
 
-std::unique_ptr<PipelineMatrixManager> createPipelineManager(std::string init_renderer_filepath);
+std::unique_ptr<PipelineMatrixManager> createPipelineManager(INIReader renderer_reader);

@@ -47,6 +47,12 @@ VkPipeline createVkPipeline(PipelineParams &params)
 								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 								 .descriptorCount = 1,
 								 .stageFlags = VK_SHADER_STAGE_ALL,
+							 },
+							 {
+								 .binding = 2,
+								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+								 .descriptorCount = 1,
+								 .stageFlags = VK_SHADER_STAGE_ALL,
 							 }},
 	};
 	return vklCreateGraphicsPipeline(graphics_pipeline_config);
@@ -113,10 +119,10 @@ void PipelineMatrixManager::update()
 {
 	auto input = Input::instance();
 
-	if (input->isKeyTap(GLFW_KEY_F1))
+	if (input->isKeyPress(GLFW_KEY_F1))
 		set_polygon_mode(polygon_mode + 1);
 
-	if (input->isKeyTap(GLFW_KEY_F2))
+	if (input->isKeyPress(GLFW_KEY_F2))
 		set_culling_mode(culling_mode + 1);
 }
 
@@ -126,11 +132,10 @@ VkPipeline PipelineMatrixManager::selected()
 }
 #pragma endregion
 
-std::unique_ptr<PipelineMatrixManager> createPipelineManager(std::string init_renderer_filepath)
+std::unique_ptr<PipelineMatrixManager> createPipelineManager(INIReader renderer_reader)
 {
 	auto manager = std::make_unique<PipelineMatrixManager>("task2.vert", "task2.frag");
 
-	INIReader renderer_reader(init_renderer_filepath);
 	bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
 	if (as_wireframe)
 		manager->set_polygon_mode(1);

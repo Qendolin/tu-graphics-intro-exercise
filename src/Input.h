@@ -47,9 +47,14 @@ public:
 		return _keys[key];
 	}
 
-	const bool isKeyTap(int key)
+	const bool isKeyPress(int key)
 	{
 		return _keys[key] && !_keysPrev[key];
+	}
+
+	const bool isKeyRelease(int key)
+	{
+		return !_keys[key] && _keysPrev[key];
 	}
 
 	void update();
