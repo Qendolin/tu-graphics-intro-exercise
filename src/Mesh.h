@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "MyUtils.h"
+#include "Pipelines.h"
 
 struct Vertex
 {
@@ -47,21 +48,25 @@ private:
 	MeshInstanceUniformBlock uniform_block = {
 		.color = {1.0, 1.0, 1.0, 1.0},
 		.model_matrix = glm::mat4(1.0),
-		.material_factors = {1.0, 1.0, 1.0, 10.0},
+		.material_factors = {0.05, 1.0, 1.0, 10.0},
 	};
 	VkBuffer uniform_buffer = VK_NULL_HANDLE;
 	VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
 	UniformBufferSlot uniform_slot = {};
+	PipelineMatrixManager::Shader shader = PipelineMatrixManager::Shader::Phong;
 
 public:
 	std::shared_ptr<Mesh> mesh = nullptr;
 
-	MeshInstance(std::shared_ptr<Mesh> mesh);
+	MeshInstance(std::shared_ptr<Mesh> mesh, PipelineMatrixManager::Shader shader);
 
 	void init_uniforms(VkDevice device, VkDescriptorPool descriptor_pool, VkDescriptorSetLayout descriptor_layout, uint32_t binding, VkBuffer uniform_buffer, UniformBufferSlot slot);
 	void set_uniforms(MeshInstanceUniformBlock data);
 	void bind_uniforms(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout);
 	VkDescriptorSet get_descriptor_set();
+	PipelineMatrixManager::Shader get_shader() {
+		return shader;
+	}
 };
 
 class BezierCurve

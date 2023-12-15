@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
+#include <array>
 
 struct PipelineParams
 {
@@ -25,6 +26,14 @@ void destroyVkPipelineMatrix(std::vector<std::vector<VkPipeline>> matrix);
 
 class PipelineMatrixManager : public ITrash
 {
+public:
+	enum Shader
+	{
+		Phong,
+		Gouraud,
+		Box
+	};
+
 private:
 	std::vector<VkPolygonMode> polygon_modes = std::vector<VkPolygonMode>({
 		VK_POLYGON_MODE_FILL,
@@ -37,14 +46,17 @@ private:
 	});
 	int polygon_mode = 0;
 	int culling_mode = 0;
-	std::vector<std::vector<VkPipeline>> matrix;
+	Shader shader = Shader::Phong;
+	std::array<std::vector<std::vector<VkPipeline>>, 3> matrix;
 
 public:
-	PipelineMatrixManager(std::string vshName, std::string fshName);
+	PipelineMatrixManager();
 
+	void load(Shader shader, std::string vshName, std::string fshName);
 	void destroy();
 	void set_polygon_mode(int mode);
 	void set_culling_mode(int mode);
+	void set_shader(Shader shader);
 	void update();
 	VkPipeline selected();
 };

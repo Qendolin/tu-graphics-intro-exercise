@@ -98,7 +98,11 @@ void destroyVkPipelineMatrix(std::vector<std::vector<VkPipeline>> matrix)
 }
 
 #pragma region PipelineMatrixManager
-PipelineMatrixManager::PipelineMatrixManager(std::string vshName, std::string fshName)
+PipelineMatrixManager::PipelineMatrixManager()
+{
+}
+
+void PipelineMatrixManager::load(PipelineMatrixManager::Shader shader, std::string vshName, std::string fshName)
 {
 	std::string vertShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/" + vshName);
 	std::string fragShaderPath = gcgLoadShaderFilePath("assets/shaders_vk/" + fshName);
@@ -108,13 +112,14 @@ PipelineMatrixManager::PipelineMatrixManager(std::string vshName, std::string fs
 		.polygon_mode = VK_POLYGON_MODE_FILL,
 		.culling_mode = VK_CULL_MODE_NONE,
 	};
-
-	matrix = createVkPipelineMatrix(pipelineParams, polygon_modes, culling_modes);
+	matrix[shader] = createVkPipelineMatrix(pipelineParams, polygon_modes, culling_modes);
 }
 
 void PipelineMatrixManager::destroy()
 {
-	destroyVkPipelineMatrix(matrix);
+	destroyVkPipelineMatrix(matrix[0]);
+	destroyVkPipelineMatrix(matrix[1]);
+	destroyVkPipelineMatrix(matrix[2]);
 }
 
 void PipelineMatrixManager::set_polygon_mode(int mode)
@@ -125,6 +130,11 @@ void PipelineMatrixManager::set_polygon_mode(int mode)
 void PipelineMatrixManager::set_culling_mode(int mode)
 {
 	culling_mode = (mode + culling_modes.size()) % culling_modes.size();
+}
+
+void PipelineMatrixManager::set_shader(PipelineMatrixManager::Shader shader)
+{
+	this->shader = shader;
 }
 
 void PipelineMatrixManager::update()
@@ -140,15 +150,16 @@ void PipelineMatrixManager::update()
 
 VkPipeline PipelineMatrixManager::selected()
 {
-	return matrix[polygon_mode][culling_mode];
+	return matrix[shader][polygon_mode][culling_mode];
 }
 #pragma endregion
 
 std::unique_ptr<PipelineMatrixManager> createPipelineManager(INIReader renderer_reader)
 {
-	// auto manager = std::make_unique<PipelineMatrixManager>("flat.vert", "flat.frag");
-	// auto manager = std::make_unique<PipelineMatrixManager>("gouraud.vert", "gouraud.frag");
-	auto manager = std::make_unique<PipelineMatrixManager>("phong.vert", "phong.frag");
+	auto manager = std::make_unique<PipelineMatrixManager>();
+	manager->load(PipelineMatrixManager::Box, "box.vert", "box.frag");
+	manager->load(PipelineMatrixManager::Phong, "phong.vert", "phong.frag");
+	manager->load(PipelineMatrixManager::Gouraud, "gouraud.vert", "gouraud.frag");
 
 	bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
 	if (as_wireframe)

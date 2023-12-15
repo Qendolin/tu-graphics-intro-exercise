@@ -53,7 +53,8 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
     // std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> cylinder_mesh(create_cylinder_mesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
-    std::shared_ptr<Mesh> sphere_mesh(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> sphere_mesh_1(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> sphere_mesh_2(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
     std::unique_ptr<BezierCurve> bezeier_curve(new BezierCurve({{-0.3f, 0.6f, 0.0f},
                                                                 {0.0f, 1.6f, 0.0f},
                                                                 {1.4f, 0.3f, 0.0f},
@@ -62,44 +63,44 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     std::shared_ptr<Mesh> bezier_mesh(create_bezier_mesh(std::move(bezeier_curve), {0, 0, -1}, 0.2, 42, 18, {1.0, 1.0, 1.0}));
 
     std::vector<std::unique_ptr<MeshInstance>> instances;
-    MeshInstance *cornell_instance = new MeshInstance(cornell_mesh);
+    MeshInstance *cornell_instance = new MeshInstance(cornell_mesh, PipelineMatrixManager::Shader::Box);
     instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
     cornell_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::mat4(1.0),
-        .material_factors = {1.0, 1.0, 0.0, 1.0},
+        .material_factors = {0.1, 1.0, 0.0, 1.0},
     });
 
-    MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh);
-    instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_2));
-    sphere_instance_2->set_uniforms({
-        .color = {0.7, 0.1, 0.2, 1.0},
-        .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
-        .material_factors = {1.0, 0.0, 4.0, 5.0},
-    });
-
-    MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh);
-    instances.push_back(std::unique_ptr<MeshInstance>(cylinder_instance));
-    cylinder_instance->set_uniforms({
-        .color = {0.2, 0.8, 0.4, 1.0},
-        .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
-        .material_factors = {1.0, 1.0, 1.0, 10.0},
-    });
-
-    MeshInstance *bezier_instance = new MeshInstance(bezier_mesh);
-    instances.push_back(std::unique_ptr<MeshInstance>(bezier_instance));
-    bezier_instance->set_uniforms({
-        .color = {0.2, 0.8, 0.4, 1.0},
-        .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
-        .material_factors = {1.0, 1.0, 1.0, 10.0},
-    });
-
-    MeshInstance *sphere_instance_1 = new MeshInstance(sphere_mesh);
+    MeshInstance *sphere_instance_1 = new MeshInstance(sphere_mesh_1, PipelineMatrixManager::Shader::Gouraud);
     instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_1));
     sphere_instance_1->set_uniforms({
-        .color = {0.4, 0.3, 0.7, 1.0},
+        .color = {1.0, 0.0, 0.0, 1.0},
+        .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
+        .material_factors = {0.1, 0.9, 0.3, 10.0},
+    });
+
+    MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh, PipelineMatrixManager::Shader::Phong);
+    instances.push_back(std::unique_ptr<MeshInstance>(cylinder_instance));
+    cylinder_instance->set_uniforms({
+        .color = {0.0, 1.0, 0.0, 1.0},
+        .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
+        .material_factors = {0.05, 0.8, 0.5, 5.0},
+    });
+
+    MeshInstance *bezier_instance = new MeshInstance(bezier_mesh, PipelineMatrixManager::Shader::Phong);
+    instances.push_back(std::unique_ptr<MeshInstance>(bezier_instance));
+    bezier_instance->set_uniforms({
+        .color = {0.0, 1.0, 0.0, 1.0},
+        .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
+        .material_factors = {0.05, 0.8, 0.5, 5.0},
+    });
+
+    MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh_2, PipelineMatrixManager::Shader::Phong);
+    instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_2));
+    sphere_instance_2->set_uniforms({
+        .color = {1.0, 0.0, 0.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
-        .material_factors = {1.0, 1.0, 0.0, 1.0},
+        .material_factors = {0.1, 0.9, 0.3, 10.0},
     });
 
     return instances;
@@ -223,15 +224,16 @@ int main(int argc, char **argv)
     VkBuffer shader_constants_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(shader_constants), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
     DirectionalLightUniformBlock directional_light = {
-        .direction = {0.1, -0.5, -1, 0},
-        .color = {1, 0.8, 0.8, 0.2},
+        .direction = {0, -1, -1, 0},
+        .color = {0.8, 0.8, 0.8, 1.0},
     };
     VkBuffer directional_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(directional_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(directional_light_buffer, &directional_light, sizeof(directional_light));
+
     PointLightUniformBlock point_light = {
         .position = {0, 0, 0, 0},
-        .color = {0.2, 0.2, 1.0, 2.0},
-        .attenuation = {0, 0, 1.0, 0}};
+        .color = {1.0, 1.0, 1.0, 1.0},
+        .attenuation = {1.0, 0.4, 0.1, 0}};
     VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
 
@@ -276,12 +278,14 @@ int main(int argc, char **argv)
 
         vklStartRecordingCommands();
         VkCommandBuffer vk_cmd_buffer = vklGetCurrentCommandBuffer();
-        VkPipeline vk_selected_pipeline = pipelines->selected();
-        vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
-        VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
 
         for (auto &&i : mesh_instances)
         {
+            pipelines->set_shader(i->get_shader());
+            VkPipeline vk_selected_pipeline = pipelines->selected();
+            vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
+            VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
+
             i->bind_uniforms(vk_cmd_buffer, vk_pipeline_layout);
             i->mesh->bind(vk_cmd_buffer);
             i->mesh->draw(vk_cmd_buffer);

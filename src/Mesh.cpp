@@ -33,9 +33,10 @@ void Mesh::draw(VkCommandBuffer cmd_buffer)
 #pragma endregion
 
 #pragma region MeshInstance
-MeshInstance::MeshInstance(std::shared_ptr<Mesh> mesh)
+MeshInstance::MeshInstance(std::shared_ptr<Mesh> mesh, PipelineMatrixManager::Shader shader)
 {
 	this->mesh = mesh;
+	this->shader = shader;
 }
 
 void MeshInstance::init_uniforms(VkDevice device, VkDescriptorPool descriptor_pool, VkDescriptorSetLayout descriptor_layout, uint32_t binding, VkBuffer uniform_buffer, UniformBufferSlot slot)
