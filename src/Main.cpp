@@ -222,6 +222,7 @@ int main(int argc, char **argv)
     ShaderConstantsUniformBlock shader_constants = {
         .user_input = {renderer_ini_reader.GetBoolean("renderer", "normals", false), 0, 0, 0}};
     VkBuffer shader_constants_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(shader_constants), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(shader_constants_buffer, &shader_constants, sizeof(shader_constants));
 
     DirectionalLightUniformBlock directional_light = {
         .direction = {0, -1, -1, 0},
