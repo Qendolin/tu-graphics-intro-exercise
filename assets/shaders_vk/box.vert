@@ -114,6 +114,7 @@ void main() {
 
 	if(dot(V, out_normal) <= 0.0) {
 		vec3 N = -out_normal;
+		out_normal = N;
 
 		vec3 ambient = vec3(1.0, 1.0, 1.0);
 		vec3 diffuse = vec3(0.0);
