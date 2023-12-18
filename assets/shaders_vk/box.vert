@@ -132,7 +132,7 @@ void main() {
 		I += u_material_factors.x * ambient * color;
 		I += u_material_factors.y * diffuse * color;
 		I += u_material_factors.z * specular;
-		I = mix(I, vec3(0.8, 1.0, 1.0), u_material_factors.z * fresnel_schlick(N, V, 1.5));
+		I = mix(I, vec3(0.8, 1.0, 1.0), fresnel_schlick(N, V, 1.925));
 		out_color.rgb = I;
 	} else {
 		out_color = color;

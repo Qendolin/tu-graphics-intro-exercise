@@ -129,6 +129,6 @@ void main() {
 	I += u_material_factors.x * ambient * color;
 	I += u_material_factors.y * diffuse * color;
 	I += u_material_factors.z * specular;
-	I = mix(I, getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N)), u_material_factors.z * fresnel_schlick(N, V, 1.5));
+	I = mix(I, getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N)), fresnel_schlick(N, V, 1.925));
 	out_color.rgb = I;
 }
