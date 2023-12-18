@@ -68,7 +68,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     cornell_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::mat4(1.0),
-        .material_factors = {0.1, 1.0, 0.0, 1.0},
+        .material_factors = {0.1, 0.9, 0.3, 10.0},
     });
 
     MeshInstance *sphere_instance_1 = new MeshInstance(sphere_mesh_1, PipelineMatrixManager::Shader::Gouraud);
