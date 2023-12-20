@@ -114,6 +114,29 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     return instances;
 }
 
+std::vector<std::unique_ptr<MeshInstance>> createPbrScene()
+{
+    std::shared_ptr<Mesh> sphere_mesh_pbr(create_sphere_mesh(0.4, 32, 64, {1.0, 1.0, 1.0}));
+
+    std::vector<std::unique_ptr<MeshInstance>> instances;
+
+    for (uint32_t x = 0; x <= 10; x++)
+    {
+        for (uint32_t y = 0; y <= 10; y++)
+        {
+            MeshInstance *pbr_sphere = new MeshInstance(sphere_mesh_pbr, PipelineMatrixManager::Shader::Pbr);
+            instances.push_back(std::unique_ptr<MeshInstance>(pbr_sphere));
+            pbr_sphere->set_uniforms({
+                .color = {0.99, 0.99, 0.99, 1.0},
+                .model_matrix = glm::translate(glm::mat4(1.0), {x - 5.0, y - 5.0, -3.0}),
+                .material_factors = {0.0, x / 10., y / 10., 0.0},
+            });
+        }
+    }
+
+    return instances;
+}
+
 #pragma endregion
 
 /* --------------------------------------------- */
@@ -200,10 +223,10 @@ int main(int argc, char **argv)
     trash.push_back(pipelines);
 
     // All instances share a uniform buffer
-    std::shared_ptr<SharedUniformBuffer> uniform_buffer(new SharedUniformBuffer(vk_physical_device, sizeof(MeshInstanceUniformBlock), 20));
+    std::shared_ptr<SharedUniformBuffer> uniform_buffer(new SharedUniformBuffer(vk_physical_device, sizeof(MeshInstanceUniformBlock), 150));
     trash.push_back(uniform_buffer);
 
-    VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 20, 20 * 2);
+    VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 150, 150 * 6);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
         vk_device,
         {{.binding = 0,
@@ -226,9 +249,9 @@ int main(int argc, char **argv)
 
     DirectionalLightUniformBlock directional_lights[3] = {
         {.direction = {2, -1, -1, 0},
-         .color = {1.0, 0.0, 0.0, 1.0}},
+         .color = {1.0, 0.0, 0.0, 3.0}},
         {.direction = {-2, -1, -1, 0},
-         .color = {0.0, 0.0, 1.0, 1.0}},
+         .color = {0.0, 0.0, 1.0, 3.0}},
         {.direction = {0, 1, 1, 0},
          .color = {1.0, 1.0, 1.0, 0.05}},
     };
@@ -237,16 +260,16 @@ int main(int argc, char **argv)
 
     PointLightUniformBlock point_lights[4] = {
         {.position = {1.3, 1.3, 0.5, 0},
-         .color = {1.0, 1.0, 1.0, 0.3},
+         .color = {1.0, 1.0, 1.0, 1.0},
          .attenuation = {0.0, 0.1, 1.0, 0}},
         {.position = {1.3, 1.3, -0.5, 0},
-         .color = {1.0, 1.0, 1.0, 0.3},
+         .color = {1.0, 1.0, 1.0, 1.0},
          .attenuation = {0.0, 0.1, 1.0, 0}},
         {.position = {-1.3, 1.3, 0.5, 0},
-         .color = {1.0, 1.0, 1.0, 0.3},
+         .color = {1.0, 1.0, 1.0, 1.0},
          .attenuation = {0.0, 0.1, 1.0, 0}},
         {.position = {-1.3, 1.3, -0.5, 0},
-         .color = {1.0, 1.0, 1.0, 0.3},
+         .color = {1.0, 1.0, 1.0, 1.0},
          .attenuation = {0.0, 0.1, 1.0, 0}},
     };
     VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_lights), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
@@ -279,6 +302,38 @@ int main(int argc, char **argv)
         writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 3, directional_light_buffer, sizeof(directional_lights));
         writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 4, point_light_buffer, sizeof(point_lights));
         writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 5, spot_light_buffer, sizeof(spot_lights));
+    }
+
+    DirectionalLightUniformBlock pbr_directional_lights[2] = {
+        {.direction = {2, -1, -1, 0},
+         .color = {255. / 255., 238. / 255., 227. / 255., 1.0}},
+        {.direction = {-2, -1, -1, 0},
+         .color = {207. / 255., 218. / 255., 255. / 255., 1.0}},
+    };
+    VkBuffer pbr_directional_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(pbr_directional_lights), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(pbr_directional_light_buffer, &pbr_directional_lights, sizeof(pbr_directional_lights));
+
+    PointLightUniformBlock pbr_point_lights[2] = {
+        {.position = {5, 0, -1, 0},
+         .color = {1.0, 0.0, 0.0, 4.0},
+         .attenuation = {0.0, 0.0, 1.0, 0}},
+        {.position = {-5, 0, -1, 0},
+         .color = {1.0, 0.0, 0.0, 4.0},
+         .attenuation = {0.0, 0.0, 1.0, 0}},
+    };
+    VkBuffer pbr_point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(pbr_point_lights), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(pbr_point_light_buffer, &pbr_point_lights, sizeof(pbr_point_lights));
+
+    auto pbr_instances = createPbrScene();
+    trash.push_back(pbr_instances[0]->mesh);
+    for (size_t i = 0; i < pbr_instances.size(); i++)
+    {
+        pbr_instances[i]->init_uniforms(vk_device, vk_descriptor_pool, vk_descriptor_set_layout, 1, uniform_buffer->buffer, uniform_buffer->slot(mesh_instances.size() + i));
+
+        camera->init_uniforms(vk_device, pbr_instances[i]->get_descriptor_set(), 0);
+        writeDescriptorSetBuffer(vk_device, pbr_instances[i]->get_descriptor_set(), 2, shader_constants_buffer, sizeof(shader_constants));
+        writeDescriptorSetBuffer(vk_device, pbr_instances[i]->get_descriptor_set(), 3, pbr_directional_light_buffer, sizeof(pbr_directional_lights));
+        writeDescriptorSetBuffer(vk_device, pbr_instances[i]->get_descriptor_set(), 4, pbr_point_light_buffer, sizeof(pbr_point_lights));
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
@@ -320,6 +375,17 @@ int main(int argc, char **argv)
             i->mesh->draw(vk_cmd_buffer);
         }
 
+        pipelines->set_shader(PipelineMatrixManager::Shader::Pbr);
+        VkPipeline vk_selected_pipeline = pipelines->selected();
+        vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
+        VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
+        for (auto &&i : pbr_instances)
+        {
+            i->bind_uniforms(vk_cmd_buffer, vk_pipeline_layout);
+            i->mesh->bind(vk_cmd_buffer);
+            i->mesh->draw(vk_cmd_buffer);
+        }
+
         vklEndRecordingCommands();
         vklPresentCurrentSwapchainImage();
 
@@ -347,8 +413,11 @@ int main(int argc, char **argv)
     vklDestroyHostCoherentBufferAndItsBackingMemory(directional_light_buffer);
     vklDestroyHostCoherentBufferAndItsBackingMemory(point_light_buffer);
     vklDestroyHostCoherentBufferAndItsBackingMemory(spot_light_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(pbr_directional_light_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(pbr_point_light_buffer);
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
-    for (auto &&i : trash)
+    std::set<std::shared_ptr<ITrash>> trash_set(trash.begin(), trash.end());
+    for (auto &&i : trash_set)
     {
         i->destroy();
     }

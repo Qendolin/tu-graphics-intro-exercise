@@ -91,47 +91,6 @@ float fresnel_schlick(vec3 N, vec3 V, float ior)
 	return R0 + (1.0 - R0) * pow(max(0.0, 1.0 - cosTheta), 5.0);
 }
 
-vec3 getCornellBoxReflectionColor(vec3 positionWS, vec3 directionWS)
-{
-	vec3 P0 = positionWS;
-	vec3 V = normalize(directionWS);
-	const float boxSize = 1.5;
-	vec4[5] planes = {
-		vec4(-1.0, 0.0, 0.0, -boxSize), // left
-		vec4(1.0, 0.0, 0.0, -boxSize),	// right
-		vec4(0.0, 1.0, 0.0, -boxSize),	// top
-		vec4(0.0, -1.0, 0.0, -boxSize), // bottom
-		vec4(0.0, 0.0, -1.0, -boxSize)	// back
-	};
-	vec3[5] colors = {
-		vec3(1.0, 0.0, 0.0),	// left
-		vec3(0.0, 1.0, 0.0),	// right
-		vec3(0.96, 0.93, 0.85), // top
-		vec3(0.64, 0.64, 0.64), // bottom
-		vec3(0.76, 0.74, 0.68)	// back
-	};
-	for (int i = 0; i < 5; ++i)
-	{
-		vec3 N = planes[i].xyz;
-		float d = planes[i].w;
-		float denom = dot(V, N);
-		if (denom <= 0)
-			continue;
-		float t = -(dot(P0, N) + d) / denom;
-		vec3 P = P0 + t * V;
-		float q = boxSize + 0.01;
-		if (P.x > -q && P.x < q && P.y > -q && P.y < q && P.z > -q && P.z < q)
-		{
-			return colors[i];
-		}
-	}
-	return vec3(0.0, 0.0, 0.0);
-}
-
-vec3 clampedReflect(vec3 I, vec3 N) {
-	return I - 2.0 * min(dot(N, I), 0.0) * N;
-}
-
 void main() {
 	gl_Position = u_view_projection_mat * u_model_mat * vec4(in_position, 1.0);
 	vec3 color = in_color.rgb * mix(vec3(1.0), u_color.rgb, u_color.a);
@@ -178,7 +137,7 @@ void main() {
 			specular += point_specular(N, L, V, alpha) * light.color.rgb * light.color.a * spot;
 		}
 		
-		specular += F * getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N));
+		specular += F * vec3(0.8, 1.0, 1.0);
 
 		vec3 I = vec3(0.0);
 		I += kA * ambient * in_color.rgb;
