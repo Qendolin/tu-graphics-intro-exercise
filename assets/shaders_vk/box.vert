@@ -122,7 +122,7 @@ void main() {
 
 		vec3 L = -u_directional_light.direction.xyz;
 		diffuse += ortho_diffuse(N, L) * u_directional_light.color.rgb * u_directional_light.color.a;
-		specular += ortho_specular(N, L, V, u_material_factors.w) * u_point_light.color.rgb * u_point_light.color.a;
+		specular += ortho_specular(N, L, V, u_material_factors.w) * u_directional_light.color.rgb * u_directional_light.color.a;
 		
 		L = u_point_light.position.xyz - P;
 		diffuse += point_diffuse(N, L, u_point_light.attenuation) * u_point_light.color.rgb * u_point_light.color.a;
