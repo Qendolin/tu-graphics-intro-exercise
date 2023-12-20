@@ -6,6 +6,7 @@ layout(location = 2) in vec3 in_normal;
 
 layout(location = 0) out vec3 out_color;
 layout(location = 1) out vec3 out_normal;
+layout(location = 2) out vec3 out_position;
 
 layout(set = 0, binding = 1) uniform ModelUniforms
 {
@@ -18,17 +19,26 @@ layout(set = 0, binding = 0) uniform CameraUniforms
 	mat4 u_view_projection_mat;
 	vec4 u_camera_position;
 };
-layout(set = 0, binding = 3) uniform DirectionalLight
-{
+
+#define ORTHO_LIGHT_COUNT 3
+struct DirectionalLight {
 	vec4 direction;
 	vec4 color;
-} u_directional_light;
-layout(set = 0, binding = 4) uniform PointLight
-{
+};
+layout(set = 0, binding = 3) uniform DirectionalLights {
+	DirectionalLight u_directional_lights[ORTHO_LIGHT_COUNT];
+};
+
+#define POINT_LIGHT_COUNT 4
+struct PointLight {
 	vec4 position;
 	vec4 color;
 	vec4 attenuation;
-} u_point_light;
+};
+layout(set = 0, binding = 4) uniform PointLights {
+	PointLight u_point_lights[POINT_LIGHT_COUNT];
+};
+
 
 float point_diffuse(vec3 N, vec3 L, vec4 a) {
 	float angle = max(0.0, dot(N, normalize(L)));
@@ -112,29 +122,47 @@ void main() {
 	vec3 P = (u_model_mat * vec4(in_position, 1.0)).xyz;
 	vec3 V = u_camera_position.xyz - P;
 
+	out_position = P;
+
 	if(dot(V, out_normal) <= 0.0) {
 		vec3 N = -out_normal;
 		out_normal = N;
 
-		vec3 ambient = vec3(1.0, 1.0, 1.0);
+		vec3 ambient = vec3(1.0, 1.0, 1.0) * 0.01;
 		vec3 diffuse = vec3(0.0);
 		vec3 specular = vec3(0.0);
 
-		vec3 L = -u_directional_light.direction.xyz;
-		diffuse += ortho_diffuse(N, L) * u_directional_light.color.rgb * u_directional_light.color.a;
-		specular += ortho_specular(N, L, V, u_material_factors.w) * u_point_light.color.rgb * u_point_light.color.a;
+		float F = fresnel_schlick(N, V, 1.3);
+		float kA = u_material_factors.x;
+		float kD = u_material_factors.y;
+		float kS = u_material_factors.z;
+		float alpha = u_material_factors.w;
+
+		for(int i = 0; i < ORTHO_LIGHT_COUNT; i++) {
+			DirectionalLight light = u_directional_lights[i];
+			vec3 L = -light.direction.xyz;
+			diffuse += ortho_diffuse(N, L) * light.color.rgb * light.color.a;
+			specular += ortho_specular(N, L, V, alpha) * light.color.rgb * light.color.a;
+		}
+
+		for(int i = 0; i < POINT_LIGHT_COUNT; i++) {
+			PointLight light = u_point_lights[i];
+			vec3 L = light.position.xyz - P;
+			diffuse += point_diffuse(N, L, light.attenuation) * light.color.rgb * light.color.a;
+			specular += point_specular(N, L, V, alpha) * light.color.rgb * light.color.a;
+		}
 		
-		L = u_point_light.position.xyz - P;
-		diffuse += point_diffuse(N, L, u_point_light.attenuation) * u_point_light.color.rgb * u_point_light.color.a;
-		specular += point_specular(N, L, V, u_material_factors.w) * u_point_light.color.rgb * u_point_light.color.a;
+		specular += F * getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N));
 
 		vec3 I = vec3(0.0);
-		I += u_material_factors.x * ambient * color;
-		I += u_material_factors.y * diffuse * color;
-		I += u_material_factors.z * specular;
-		I = mix(I, vec3(0.8, 1.0, 1.0), fresnel_schlick(N, V, 1.925));
+		I += kA * ambient * in_color.rgb;
+		I += kD * diffuse * in_color.rgb;
+		I += kS * specular;
 		out_color.rgb = I;
+		out_color.rgb /= (out_color.rgb + 1.0);
 	} else {
-		out_color = color;
+		out_color.rgb = color;
 	}
+	// reinhard tone mapping
+	out_color.rgb /= (out_color.rgb + 1.0);
 }
