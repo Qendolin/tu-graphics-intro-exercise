@@ -35,6 +35,17 @@ layout(set = 0, binding = 4) uniform PointLights {
 	PointLight u_point_lights[POINT_LIGHT_COUNT];
 };
 
+#define SPOT_LIGHT_COUNT 2
+struct SpotLight {
+	vec4 position;
+	vec4 direction;
+	vec4 color;
+	vec4 attenuation;
+};
+layout(set = 0, binding = 5) uniform SpotLights {
+	SpotLight u_spot_lights[SPOT_LIGHT_COUNT];
+};
+
 layout(set = 0, binding = 1) uniform ModelUniforms
 {
 	vec4 u_color;
@@ -67,6 +78,13 @@ float ortho_specular(vec3 N, vec3 L, vec3 V, float alpha)
 float ortho_diffuse(vec3 N, vec3 L)
 {
 	return max(0.0, dot(N, normalize(L)));
+}
+
+float spot_falloff(vec3 N, vec3 L, float outer, float inner) {
+	float theta = dot(-normalize(N), normalize(L));
+	float gamma = cos(outer);
+	float epsilon = cos(inner) - cos(outer);
+	return smoothstep(0.0, 1.0, (theta - gamma) / epsilon);
 }
 
 float fresnel_schlick(vec3 N, vec3 V, float ior)
@@ -160,6 +178,14 @@ void main()
 		vec3 L = light.position.xyz - P;
 		diffuse += point_diffuse(N, L, light.attenuation) * light.color.rgb * light.color.a;
 		specular += point_specular(N, L, V, alpha) * light.color.rgb * light.color.a;
+	}
+
+	for(int i = 0; i < SPOT_LIGHT_COUNT; i++) {
+		SpotLight light = u_spot_lights[i];
+		vec3 L = light.position.xyz - P;
+		float spot = spot_falloff(light.direction.xyz, L, light.direction.w, light.attenuation.w);
+		diffuse += point_diffuse(N, L, light.attenuation) * light.color.rgb * light.color.a * spot;
+		specular += point_specular(N, L, V, alpha) * light.color.rgb * light.color.a * spot;
 	}
 	
 	specular += F * getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N));

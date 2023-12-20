@@ -48,6 +48,14 @@ struct PointLightUniformBlock
     glm::vec4 attenuation;
 };
 
+struct SpotLightUniformBlock
+{
+    glm::vec4 position;
+    glm::vec4 direction;
+    glm::vec4 color;
+    glm::vec4 attenuation;
+};
+
 std::vector<std::unique_ptr<MeshInstance>> createScene()
 {
     std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
@@ -198,26 +206,18 @@ int main(int argc, char **argv)
     VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 20, 20 * 2);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
         vk_device,
-        {{
-             .binding = 0,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 1,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 2,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 3,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 4,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         }});
+        {{.binding = 0,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 1,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 2,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 3,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 4,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 5,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}});
 
     ShaderConstantsUniformBlock shader_constants = {
         .user_input = {renderer_ini_reader.GetBoolean("renderer", "normals", false), 0, 0, 0}};
@@ -252,6 +252,19 @@ int main(int argc, char **argv)
     VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_lights), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_lights, sizeof(point_lights));
 
+    SpotLightUniformBlock spot_lights[2] = {
+        {.position = {1.4, 1.0, 3.0, 0},
+         .direction = {-0.24, -0.2, -1.0, glm::radians(20.0) / 2.0},
+         .color = {1.0, 1.0, 1.0, 5.0},
+         .attenuation = {0.0, 1.0, 0.0, glm::radians(15.0) / 2.0}},
+        {.position = {-1.4, 1.0, 3.0, 0},
+         .direction = {0.24, -0.2, -1.0, glm::radians(20.0) / 2.0},
+         .color = {1.0, 1.0, 1.0, 5.0},
+         .attenuation = {0.0, 1.0, 0.0, glm::radians(15.0) / 2.0}},
+    };
+    VkBuffer spot_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(spot_lights), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    vklCopyDataIntoHostCoherentBuffer(spot_light_buffer, &spot_lights, sizeof(spot_lights));
+
     auto mesh_instances = createScene();
     for (size_t i = 0; i < mesh_instances.size(); i++)
     {
@@ -265,6 +278,7 @@ int main(int argc, char **argv)
         writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 2, shader_constants_buffer, sizeof(shader_constants));
         writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 3, directional_light_buffer, sizeof(directional_lights));
         writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 4, point_light_buffer, sizeof(point_lights));
+        writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 5, spot_light_buffer, sizeof(spot_lights));
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
@@ -332,6 +346,7 @@ int main(int argc, char **argv)
     vklDestroyHostCoherentBufferAndItsBackingMemory(shader_constants_buffer);
     vklDestroyHostCoherentBufferAndItsBackingMemory(directional_light_buffer);
     vklDestroyHostCoherentBufferAndItsBackingMemory(point_light_buffer);
+    vklDestroyHostCoherentBufferAndItsBackingMemory(spot_light_buffer);
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
     for (auto &&i : trash)
     {

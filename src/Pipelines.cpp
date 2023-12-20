@@ -36,36 +36,14 @@ VkPipeline createVkPipeline(PipelineParams &params)
 			}},
 		.polygonDrawMode = params.polygon_mode,
 		.triangleCullingMode = params.culling_mode,
-		.descriptorLayout = {{
-								 .binding = 0,
-								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-								 .descriptorCount = 1,
-								 .stageFlags = VK_SHADER_STAGE_ALL,
-							 },
-							 {
-								 .binding = 1,
-								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-								 .descriptorCount = 1,
-								 .stageFlags = VK_SHADER_STAGE_ALL,
-							 },
-							 {
-								 .binding = 2,
-								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-								 .descriptorCount = 1,
-								 .stageFlags = VK_SHADER_STAGE_ALL,
-							 },
-							 {
-								 .binding = 3,
-								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-								 .descriptorCount = 1,
-								 .stageFlags = VK_SHADER_STAGE_ALL,
-							 },
-							 {
-								 .binding = 4,
-								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-								 .descriptorCount = 1,
-								 .stageFlags = VK_SHADER_STAGE_ALL,
-							 }},
+		.descriptorLayout = {
+			{.binding = 0, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_ALL},
+			{.binding = 1, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_ALL},
+			{.binding = 2, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_ALL},
+			{.binding = 3, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_ALL},
+			{.binding = 4, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_ALL},
+			{.binding = 5, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1, .stageFlags = VK_SHADER_STAGE_ALL},
+		},
 	};
 	return vklCreateGraphicsPipeline(graphics_pipeline_config);
 }
