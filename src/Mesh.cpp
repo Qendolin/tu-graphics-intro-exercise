@@ -247,7 +247,7 @@ public:
 
 void append_circle_cap(MeshBuilder &builder, float radius, int segments, glm::vec3 pos, glm::vec3 color, glm::vec3 normal)
 {
-	builder.vertex({pos, color, normal});
+	builder.vertex({pos, color, normal, {0.5, 0.5}});
 	int center_index = builder.index();
 	auto cycle = builder.start_cycle(segments);
 	for (int s = 0; s < segments; s++)
@@ -259,8 +259,10 @@ void append_circle_cap(MeshBuilder &builder, float radius, int segments, glm::ve
 			glm::sin(phi),
 		};
 		glm::vec3 v = pos + radius * spoke;
+		glm::vec2 uv = {spoke.x, spoke.z};
+		uv = uv * 0.5f + 0.5f;
 
-		builder.vertex({v, color, normal});
+		builder.vertex({v, color, normal, uv});
 		builder.tri(center_index, cycle.rel(s), cycle.rel(s + 1));
 	}
 }
@@ -290,8 +292,9 @@ std::unique_ptr<Mesh> create_cylinder_mesh(float radius, float height, int segme
 			};
 			glm::vec3 v = radius * n;
 			v.y = top ? height / 2 : -height / 2;
+			glm::vec2 uv = {(float)s / segments, 1.0 - half};
 
-			builder->vertex({v, color, n});
+			builder->vertex({v, color, n, uv});
 
 			if (top)
 				builder->quad(top_cycle.rel(s), top_cycle.rel(s + 1), bot_cycle.rel(s), bot_cycle.rel(s + 1));
@@ -307,9 +310,9 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 {
 	std::unique_ptr<MeshBuilder> builder = std::make_unique<MeshBuilder>();
 
-	builder->vertex({{0, -radius, 0}, color, {0, -1, 0}});
+	builder->vertex({{0, -radius, 0}, color, {0, -1, 0}, {0.5, 0.0}});
 	uint32_t bot_cap_index = builder->index();
-	builder->vertex({{0, radius, 0}, color, {0, 1, 0}});
+	builder->vertex({{0, radius, 0}, color, {0, 1, 0}, {0.5, 1.0}});
 	uint32_t top_cap_index = builder->index();
 
 	MeshBuilder::Cycle prev_cycle;
@@ -329,8 +332,9 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 				glm::sin(theta) * glm::sin(phi),
 			};
 			glm::vec3 v = radius * n;
+			glm::vec2 uv = {(float)s / segments, (float)r / rings};
 
-			builder->vertex({v, color, n});
+			builder->vertex({v, color, n, uv});
 
 			if (cap)
 			{
@@ -370,6 +374,8 @@ std::unique_ptr<Mesh> create_bezier_mesh(std::unique_ptr<BezierCurve> curve, glm
 	builder->winding(false);
 
 	MeshBuilder::Cycle prev_cycle;
+	float len = 0.0;
+	glm::vec3 prev_p;
 	for (int r = 0; r <= resolution; r++)
 	{
 		bool cap = r == 0 || r == resolution;
@@ -380,12 +386,19 @@ std::unique_ptr<Mesh> create_bezier_mesh(std::unique_ptr<BezierCurve> curve, glm
 		glm::vec3 bitan = glm::normalize(glm::cross(tan, up));
 		auto curr_cycle = builder->start_cycle(segments);
 
+		if (r > 0)
+		{
+			len += glm::distance(prev_p, p);
+		}
+
 		for (int s = 0; s < segments; s++)
 		{
 			float phi = glm::two_pi<float>() * s / segments;
 			glm::vec3 n = glm::mat3(glm::rotate(glm::mat4(1.0), phi, tan)) * bitan;
 			glm::vec3 v = p + n * radius;
-			builder->vertex({v, color, n});
+			glm::vec2 uv = {(float)s / segments, len};
+
+			builder->vertex({v, color, n, uv});
 
 			if (r > 0)
 			{
@@ -393,6 +406,7 @@ std::unique_ptr<Mesh> create_bezier_mesh(std::unique_ptr<BezierCurve> curve, glm
 			}
 		}
 		prev_cycle = curr_cycle;
+		prev_p = p;
 	}
 
 	return builder->build();
@@ -416,6 +430,13 @@ glm::vec3 cube_face_normals[]{
 	{1.0, 0.0, 0.0},  // right
 	{0.0, 0.0, 1.0},  // front
 	{0.0, 0.0, -1.0}  // back
+};
+
+glm::vec2 cube_uvs[]{
+	{0.0, 0.0},
+	{1.0, 0.0},
+	{1.0, 1.0},
+	{0.0, 1.0},
 };
 
 struct CubeFace
@@ -471,10 +492,10 @@ std::unique_ptr<Mesh> create_cube_mesh(float width, float height, float depth, g
 	for (size_t i = 0; i < cube_faces.size(); i++)
 	{
 		auto verts = cube_faces[i].verts;
-		vertices[i * 4 + 0] = {positions[verts[0]], color, cube_face_normals[i]};
-		vertices[i * 4 + 1] = {positions[verts[1]], color, cube_face_normals[i]};
-		vertices[i * 4 + 2] = {positions[verts[2]], color, cube_face_normals[i]};
-		vertices[i * 4 + 3] = {positions[verts[3]], color, cube_face_normals[i]};
+		vertices[i * 4 + 0] = {positions[verts[0]], color, cube_face_normals[i], cube_uvs[0]};
+		vertices[i * 4 + 1] = {positions[verts[1]], color, cube_face_normals[i], cube_uvs[1]};
+		vertices[i * 4 + 2] = {positions[verts[2]], color, cube_face_normals[i], cube_uvs[2]};
+		vertices[i * 4 + 3] = {positions[verts[3]], color, cube_face_normals[i], cube_uvs[3]};
 		indices.insert(indices.end(), {index + 0, index + 1, index + 2, index + 2, index + 3, index + 0});
 		index += 4;
 	}

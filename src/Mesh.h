@@ -17,6 +17,7 @@ struct Vertex
 	glm::vec3 position;
 	glm::vec3 color;
 	glm::vec3 normal;
+	glm::vec2 uv;
 };
 
 struct MeshInstanceUniformBlock
@@ -64,7 +65,8 @@ public:
 	void set_uniforms(MeshInstanceUniformBlock data);
 	void bind_uniforms(VkCommandBuffer cmd_buffer, VkPipelineLayout pipeline_layout);
 	VkDescriptorSet get_descriptor_set();
-	PipelineMatrixManager::Shader get_shader() {
+	PipelineMatrixManager::Shader get_shader()
+	{
 		return shader;
 	}
 };

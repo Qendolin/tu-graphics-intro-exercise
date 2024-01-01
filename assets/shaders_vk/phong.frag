@@ -3,6 +3,7 @@
 layout(location = 0) in vec3 in_color;
 layout(location = 1) in vec3 in_normal;
 layout(location = 2) in vec3 in_position;
+layout(location = 3) in vec2 in_uv;
 
 layout(location = 0) out vec4 out_color;
 
@@ -117,14 +118,18 @@ void main()
 	// normalizing the vertex normal is important and actually makes a difference
 	vec3 N = normalize(in_normal);
 	out_color.a = 1.0;
-	if (u_user_input.x == 1)
+	if (u_user_input[0] == 1)
 	{
 		out_color.rgb = N;
 		return;
 	}
-	else if (u_user_input.x == 2)
+	else if (u_user_input[0] == 2)
 	{
 		out_color.rgb = N * 0.5 + 0.5;
+		return;
+	}
+	if(u_user_input[1] == 1) {
+		out_color.rgb = vec3(in_uv, 0.0);
 		return;
 	}
 

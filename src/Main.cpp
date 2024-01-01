@@ -51,10 +51,9 @@ struct PointLightUniformBlock
 std::vector<std::unique_ptr<MeshInstance>> createScene()
 {
     std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
-    // std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> cylinder_mesh(create_cylinder_mesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
-    std::shared_ptr<Mesh> sphere_mesh_1(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
-    std::shared_ptr<Mesh> sphere_mesh_2(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
+    std::shared_ptr<Mesh> sphere_mesh(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
     std::unique_ptr<BezierCurve> bezeier_curve(new BezierCurve({{-0.3f, 0.6f, 0.0f},
                                                                 {0.0f, 1.6f, 0.0f},
                                                                 {1.4f, 0.3f, 0.0f},
@@ -71,11 +70,11 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
         .material_factors = {0.1, 0.9, 0.3, 10.0},
     });
 
-    MeshInstance *sphere_instance_1 = new MeshInstance(sphere_mesh_1, PipelineMatrixManager::Shader::Gouraud);
+    MeshInstance *sphere_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::Phong);
     instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_1));
     sphere_instance_1->set_uniforms({
         .color = {1.0, 0.0, 0.0, 1.0},
-        .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}),
+        .model_matrix = glm::translate(glm::rotate(glm::mat4(1.0), glm::radians(45.0f), {0, 1, 0}), {-0.5, -0.8, 0.0}),
         .material_factors = {0.1, 0.9, 0.3, 10.0},
     });
 
@@ -95,7 +94,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
         .material_factors = {0.05, 0.8, 0.5, 5.0},
     });
 
-    MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh_2, PipelineMatrixManager::Shader::Phong);
+    MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh, PipelineMatrixManager::Shader::Phong);
     instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_2));
     sphere_instance_2->set_uniforms({
         .color = {1.0, 0.0, 0.0, 1.0},
@@ -198,29 +197,19 @@ int main(int argc, char **argv)
     VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 20, 20 * 2);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
         vk_device,
-        {{
-             .binding = 0,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 1,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 2,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 3,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         },
-         {
-             .binding = 4,
-             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         }});
+        {{.binding = 0,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 1,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 2,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 3,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 4,
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}});
 
     ShaderConstantsUniformBlock shader_constants = {
-        .user_input = {renderer_ini_reader.GetBoolean("renderer", "normals", false), 0, 0, 0}};
+        .user_input = {renderer_ini_reader.GetBoolean("renderer", "normals", false), renderer_ini_reader.GetBoolean("renderer", "texcoords", false), 0, 0}};
     VkBuffer shader_constants_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(shader_constants), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(shader_constants_buffer, &shader_constants, sizeof(shader_constants));
 
@@ -269,6 +258,12 @@ int main(int argc, char **argv)
         {
             shader_constants.user_input.x++;
             shader_constants.user_input.x %= 3;
+            vklCopyDataIntoHostCoherentBuffer(shader_constants_buffer, &shader_constants, sizeof(shader_constants));
+        }
+        if (input->isKeyPress(GLFW_KEY_T))
+        {
+            shader_constants.user_input.y++;
+            shader_constants.user_input.y %= 2;
             vklCopyDataIntoHostCoherentBuffer(shader_constants_buffer, &shader_constants, sizeof(shader_constants));
         }
 
