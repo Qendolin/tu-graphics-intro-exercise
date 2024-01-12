@@ -98,6 +98,7 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, st
 
 std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, std::vector<std::string> names)
 {
+	VKL_LOG("createTextureImages:start");
 	VkCommandPool vk_img_cmd_pool = VK_NULL_HANDLE;
 	VkCommandPoolCreateInfo vk_img_cmd_pool_create_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -123,6 +124,7 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 	};
 	error = vkBeginCommandBuffer(vk_img_cmd_buf, &vk_img_cmd_buf_begin_info);
 	VKL_CHECK_VULKAN_ERROR(error);
+	VKL_LOG("createTextureImages:loop_start");
 
 	std::vector<VkBuffer> host_buffers;
 	std::vector<std::shared_ptr<Texture>> result;
@@ -134,12 +136,14 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		uint32_t mipLevels = glm::log2((float)glm::max(img_info.extent.width, img_info.extent.width)) + 1;
 		std::vector<VkBuffer> level_bufs(mipLevels);
 		std::vector<VklImageInfo> level_infos(mipLevels);
+		VKL_LOG("createTextureImages:img_load_loop_start");
 		for (size_t i = 0; i < mipLevels; i++)
 		{
 			level_infos[i] = vklGetDdsImageLevelInfo(path.c_str(), i);
 			level_bufs[i] = vklLoadDdsImageLevelIntoHostCoherentBuffer(path.c_str(), i);
 			host_buffers.push_back(level_bufs[i]);
 		}
+		VKL_LOG("createTextureImages:img_load_loop_end");
 		VkImage image = loadImageToTexture(vk_img_cmd_buf, queue_family, level_infos, level_bufs);
 
 		VkImageView image_view = VK_NULL_HANDLE;
@@ -180,6 +184,7 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		.commandBufferCount = 1,
 		.pCommandBuffers = &vk_img_cmd_buf,
 	};
+
 	error = vkQueueSubmit(vk_queue, 1, &vk_img_submit_info, vk_img_fence);
 	VKL_CHECK_VULKAN_ERROR(error);
 
