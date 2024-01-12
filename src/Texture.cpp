@@ -1,6 +1,11 @@
 #include "Texture.h"
 #include "vulkan_ext.h"
 #include "Descriptors.h"
+#include "PathUtils.h"
+#include <glm/glm.hpp>
+
+// Why is max defined as a macro?
+#undef max
 
 #pragma region Texture
 Texture::Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView view)
@@ -130,7 +135,10 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 			  << std::flush;
 	for (auto &&name : names)
 	{
-		std::string path = "assets/textures/" + name;
+		std::string rel_path = "assets/textures/" + name;
+		std::string path = gcgFindTextureFile(rel_path);
+		std::cout << "rel_path=" << rel_path << ", path=" << path << std::endl
+				  << std::flush;
 		std::cout << "createTextureImages::vklGetDdsImageInfo" << std::endl
 				  << std::flush;
 		VklImageInfo img_info = vklGetDdsImageInfo(path.c_str());
