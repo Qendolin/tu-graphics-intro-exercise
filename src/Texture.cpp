@@ -25,7 +25,6 @@ void Texture::destroy(VkDevice device)
 {
 	vklDestroyDeviceLocalImageAndItsBackingMemory(this->image);
 	vkDestroyImageView(device, this->view, nullptr);
-	vkDestroySampler(device, this->sampler, nullptr);
 }
 #pragma endregion
 
