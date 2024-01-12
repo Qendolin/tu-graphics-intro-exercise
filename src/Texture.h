@@ -21,8 +21,11 @@ private:
 	VkExtent2D extent;
 
 public:
-	Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView view, VkSampler sampler);
+	Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView view);
+	void setSampler(VkSampler sampler);
 	void destroy(VkDevice device);
+	void init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding);
 };
 
 std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, std::vector<std::string> names);
+VkSampler createSampler(VkDevice vk_device, VkFilter minFilter, VkFilter magFilter, VkSamplerMipmapMode mipmapMode);

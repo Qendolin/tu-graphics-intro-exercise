@@ -77,3 +77,22 @@ void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t b
 	};
 	vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, nullptr);
 }
+
+void writeDescriptorSetImage(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkSampler sampler, VkImageView view)
+{
+	VkDescriptorImageInfo imageInfo = {
+		.sampler = sampler,
+		.imageView = view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+	VkWriteDescriptorSet vkWriteDescriptorSet = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = dst,
+		.dstBinding = binding,
+		.dstArrayElement = 0,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = &imageInfo,
+	};
+	vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, nullptr);
+}

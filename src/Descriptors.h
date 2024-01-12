@@ -21,3 +21,4 @@ struct DescriptorSetLayoutParams
 VkDescriptorSetLayout createVkDescriptorSetLayout(VkDevice vkDevice, std::vector<DescriptorSetLayoutParams> params);
 VkDescriptorSet createVkDescriptorSet(VkDevice vkDevice, VkDescriptorPool vkDescriptorPool, VkDescriptorSetLayout vkDescriptorSetLayout);
 void writeDescriptorSetBuffer(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkBuffer buffer, size_t size, UniformBufferSlot range = {0, (VkDeviceSize)-1});
+void writeDescriptorSetImage(VkDevice vkDevice, VkDescriptorSet dst, uint32_t binding, VkSampler sampler, VkImageView view);

@@ -36,6 +36,8 @@ layout(set = 0, binding = 1) uniform ModelUniforms
 	vec4 u_material_factors;
 };
 
+layout (binding = 5) uniform sampler2D diffuse_texture;
+
 float point_diffuse(vec3 N, vec3 L, vec4 a)
 {
 	float angle = max(0.0, dot(N, normalize(L)));
@@ -148,9 +150,12 @@ void main()
 	diffuse += point_diffuse(N, L, u_point_light.attenuation) * u_point_light.color.rgb * u_point_light.color.a;
 	specular += point_specular(N, L, V, u_material_factors.w) * u_point_light.color.rgb * u_point_light.color.a;
 	
+	// vec3 diffuse_color = in_color.rgb;
+	vec3 diffuse_color = texture(diffuse_texture, in_uv).rgb;
+
 	vec3 I = vec3(0.0);
-	I += u_material_factors.x * ambient * in_color.rgb;
-	I += u_material_factors.y * diffuse * in_color.rgb;
+	I += u_material_factors.x * ambient * diffuse_color;
+	I += u_material_factors.y * diffuse * diffuse_color;
 	I += u_material_factors.z * specular;
 	I = mix(I, getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N)), fresnel_schlick(N, V, 1.925));
 	out_color.rgb = I;

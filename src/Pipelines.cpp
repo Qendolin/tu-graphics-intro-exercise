@@ -71,6 +71,12 @@ VkPipeline createVkPipeline(PipelineParams &params)
 								 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 								 .descriptorCount = 1,
 								 .stageFlags = VK_SHADER_STAGE_ALL,
+							 },
+							 {
+								 .binding = 5,
+								 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+								 .descriptorCount = 1,
+								 .stageFlags = VK_SHADER_STAGE_ALL,
 							 }},
 	};
 	return vklCreateGraphicsPipeline(graphics_pipeline_config);

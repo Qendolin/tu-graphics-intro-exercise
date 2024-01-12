@@ -211,7 +211,9 @@ int main(int argc, char **argv)
          {.binding = 3,
           .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
          {.binding = 4,
-          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER}});
+          .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
+         {.binding = 5,
+          .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER}});
 
     ShaderConstantsUniformBlock shader_constants = {
         .user_input = {renderer_ini_reader.GetBoolean("renderer", "normals", false), renderer_ini_reader.GetBoolean("renderer", "texcoords", false), 0, 0}};
@@ -232,10 +234,12 @@ int main(int argc, char **argv)
     VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
 
+    VkSampler sampler = createSampler(vk_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR);
     auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds"});
     for (auto &&tex : textures)
     {
         trash.push_back(tex);
+        tex->setSampler(sampler);
     }
 
     auto mesh_instances = createScene();
@@ -247,10 +251,12 @@ int main(int argc, char **argv)
         // vklCreateGraphicsPipeline does not allow binding multiple descriptor sets simultaneously
         // thus it's required to hook the scene-static uniforms into every descriptor set
         // See: https://github.com/cg-tuwien/VulkanLaunchpad/issues/30
-        camera->init_uniforms(vk_device, mesh_instances[i]->get_descriptor_set(), 0);
-        writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 2, shader_constants_buffer, sizeof(shader_constants));
-        writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 3, directional_light_buffer, sizeof(directional_light));
-        writeDescriptorSetBuffer(vk_device, mesh_instances[i]->get_descriptor_set(), 4, point_light_buffer, sizeof(point_light));
+        VkDescriptorSet descriptor_set = mesh_instances[i]->get_descriptor_set();
+        camera->init_uniforms(vk_device, descriptor_set, 0);
+        writeDescriptorSetBuffer(vk_device, descriptor_set, 2, shader_constants_buffer, sizeof(shader_constants));
+        writeDescriptorSetBuffer(vk_device, descriptor_set, 3, directional_light_buffer, sizeof(directional_light));
+        writeDescriptorSetBuffer(vk_device, descriptor_set, 4, point_light_buffer, sizeof(point_light));
+        textures[0]->init_uniforms(vk_device, descriptor_set, 5);
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
@@ -329,6 +335,7 @@ int main(int argc, char **argv)
     {
         i->destroy(vk_device);
     }
+    vkDestroySampler(vk_device, sampler, nullptr);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
     vkDestroyDevice(vk_device, nullptr);

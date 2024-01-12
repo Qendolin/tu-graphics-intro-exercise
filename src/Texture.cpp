@@ -1,14 +1,24 @@
 #include "Texture.h"
 #include "vulkan_ext.h"
+#include "Descriptors.h"
 
 #pragma region Texture
-Texture::Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView view, VkSampler sampler)
+Texture::Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView view)
 {
 	this->image = image;
 	this->format = format;
 	this->extent = extent;
 	this->view = view;
+}
+
+void Texture::setSampler(VkSampler sampler)
+{
 	this->sampler = sampler;
+}
+
+void Texture::init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
+{
+	writeDescriptorSetImage(device, descriptor_set, binding, this->sampler, this->view);
 }
 
 void Texture::destroy(VkDevice device)
@@ -139,20 +149,7 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		error = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &image_view);
 		VKL_CHECK_VULKAN_ERROR(error);
 
-		VkSampler image_sampler = VK_NULL_HANDLE;
-		VkSamplerCreateInfo image_sampler_create_info = {
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.flags = 0,
-			.magFilter = VK_FILTER_LINEAR,
-			.minFilter = VK_FILTER_LINEAR,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			.minLod = 0.0f,
-			.maxLod = VK_LOD_CLAMP_NONE,
-		};
-		error = vkCreateSampler(vk_device, &image_sampler_create_info, nullptr, &image_sampler);
-		VKL_CHECK_VULKAN_ERROR(error);
-
-		result.push_back(std::make_shared<Texture>(image, img_info.imageFormat, img_info.extent, image_view, image_sampler));
+		result.push_back(std::make_shared<Texture>(image, img_info.imageFormat, img_info.extent, image_view));
 	}
 
 	error = vkEndCommandBuffer(vk_img_cmd_buf);
@@ -185,4 +182,21 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 	}
 
 	return result;
+}
+
+VkSampler createSampler(VkDevice vk_device, VkFilter minFilter, VkFilter magFilter, VkSamplerMipmapMode mipmapMode)
+{
+	VkSampler sampler = VK_NULL_HANDLE;
+	VkSamplerCreateInfo sampler_create_info = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.flags = 0,
+		.magFilter = minFilter,
+		.minFilter = magFilter,
+		.mipmapMode = mipmapMode,
+		.minLod = 0.0f,
+		.maxLod = VK_LOD_CLAMP_NONE,
+	};
+	VkResult error = vkCreateSampler(vk_device, &sampler_create_info, nullptr, &sampler);
+	VKL_CHECK_VULKAN_ERROR(error);
+	return sampler;
 }
