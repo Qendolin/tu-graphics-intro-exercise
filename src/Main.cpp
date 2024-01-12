@@ -273,6 +273,8 @@ int main(int argc, char **argv)
         }
     }
 
+    std::cout << "main::vklEnablePipelineHotReloading" << std::endl
+              << std::flush;
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
     while (!glfwWindowShouldClose(window))
@@ -301,28 +303,52 @@ int main(int argc, char **argv)
         pipelines->update();
         controls->update();
 
+        std::cout << "main::vklWaitForNextSwapchainImage" << std::endl
+                  << std::flush;
         vklWaitForNextSwapchainImage();
 
+        std::cout << "main::vklStartRecordingCommands" << std::endl
+                  << std::flush;
         vklStartRecordingCommands();
         VkCommandBuffer vk_cmd_buffer = vklGetCurrentCommandBuffer();
 
+        std::cout << "main::mesh_loop" << std::endl
+                  << std::flush;
         for (auto &&i : mesh_instances)
         {
+            std::cout << "main::set_shader" << std::endl
+                      << std::flush;
             pipelines->set_shader(i->get_shader());
             VkPipeline vk_selected_pipeline = pipelines->selected();
+            std::cout << "main::vklCmdBindPipeline" << std::endl
+                      << std::flush;
             vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
+            std::cout << "main::vklGetLayoutForPipeline" << std::endl
+                      << std::flush;
             VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
 
+            std::cout << "main::bind_uniforms" << std::endl
+                      << std::flush;
             i->bind_uniforms(vk_cmd_buffer, vk_pipeline_layout);
+            std::cout << "main::mesh_bind" << std::endl
+                      << std::flush;
             i->mesh->bind(vk_cmd_buffer);
+            std::cout << "main::mesh_draw" << std::endl
+                      << std::flush;
             i->mesh->draw(vk_cmd_buffer);
         }
 
+        std::cout << "main::vklEndRecordingCommands" << std::endl
+                  << std::flush;
         vklEndRecordingCommands();
+        std::cout << "main::vklPresentCurrentSwapchainImage" << std::endl
+                  << std::flush;
         vklPresentCurrentSwapchainImage();
 
         if (cmdline_args.run_headless)
         {
+            std::cout << "main::vklGetCurrentSwapChainImageIndex" << std::endl
+                      << std::flush;
             uint32_t idx = vklGetCurrentSwapChainImageIndex();
             std::string screenshot_filename = "screenshot";
             if (cmdline_args.set_filename)
@@ -330,6 +356,8 @@ int main(int argc, char **argv)
 
             int width, height;
             glfwGetFramebufferSize(window, &width, &height);
+            std::cout << "main::gcgSaveScreenshot" << std::endl
+                      << std::flush;
             gcgSaveScreenshot(screenshot_filename, swapchain_color_attachments[idx].image, width,
                               height, vk_surface_image_format.format, vk_device, vk_physical_device, vk_queue,
                               graphics_queue_family);
