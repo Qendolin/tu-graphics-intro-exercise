@@ -98,7 +98,6 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, st
 
 std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, std::vector<std::string> names)
 {
-	VKL_LOG("createTextureImages:start");
 	VkCommandPool vk_img_cmd_pool = VK_NULL_HANDLE;
 	VkCommandPoolCreateInfo vk_img_cmd_pool_create_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -124,26 +123,37 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 	};
 	error = vkBeginCommandBuffer(vk_img_cmd_buf, &vk_img_cmd_buf_begin_info);
 	VKL_CHECK_VULKAN_ERROR(error);
-	VKL_LOG("createTextureImages:loop_start");
 
 	std::vector<VkBuffer> host_buffers;
 	std::vector<std::shared_ptr<Texture>> result;
+	std::cout << "createTextureImages::before_loop" << std::endl
+			  << std::flush;
 	for (auto &&name : names)
 	{
 		std::string path = "assets/textures/" + name;
+		std::cout << "createTextureImages::vklGetDdsImageInfo" << std::endl
+				  << std::flush;
 		VklImageInfo img_info = vklGetDdsImageInfo(path.c_str());
 
 		uint32_t mipLevels = glm::log2((float)glm::max(img_info.extent.width, img_info.extent.width)) + 1;
+		std::cout << "createTextureImages::vectors" << std::endl
+				  << std::flush;
 		std::vector<VkBuffer> level_bufs(mipLevels);
 		std::vector<VklImageInfo> level_infos(mipLevels);
-		VKL_LOG("createTextureImages:img_load_loop_start");
+		std::cout << "createTextureImages::before_inner_loop" << std::endl
+				  << std::flush;
 		for (size_t i = 0; i < mipLevels; i++)
 		{
+			std::cout << "createTextureImages::vklGetDdsImageLevelInfo" << std::endl
+					  << std::flush;
 			level_infos[i] = vklGetDdsImageLevelInfo(path.c_str(), i);
+			std::cout << "createTextureImages::vklLoadDdsImageLevelIntoHostCoherentBuffer" << std::endl
+					  << std::flush;
 			level_bufs[i] = vklLoadDdsImageLevelIntoHostCoherentBuffer(path.c_str(), i);
 			host_buffers.push_back(level_bufs[i]);
 		}
-		VKL_LOG("createTextureImages:img_load_loop_end");
+		std::cout << "createTextureImages::loadImageToTexture" << std::endl
+				  << std::flush;
 		VkImage image = loadImageToTexture(vk_img_cmd_buf, queue_family, level_infos, level_bufs);
 
 		VkImageView image_view = VK_NULL_HANDLE;
@@ -162,11 +172,15 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 				.layerCount = 1,
 			},
 		};
+		std::cout << "createTextureImages::vkCreateImageView" << std::endl
+				  << std::flush;
 		error = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &image_view);
 		VKL_CHECK_VULKAN_ERROR(error);
 
 		result.push_back(std::make_shared<Texture>(image, img_info.imageFormat, img_info.extent, image_view));
 	}
+	std::cout << "createTextureImages::after_loop" << std::endl
+			  << std::flush;
 
 	error = vkEndCommandBuffer(vk_img_cmd_buf);
 	VKL_CHECK_VULKAN_ERROR(error);
