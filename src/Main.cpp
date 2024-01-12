@@ -242,10 +242,14 @@ int main(int argc, char **argv)
     auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds"});
     for (auto &&tex : textures)
     {
+        std::cout << "main::init_texture " << tex << std::endl
+                  << std::flush;
         trash.push_back(tex);
         tex->setSampler(sampler);
     }
 
+    std::cout << "main::createScene " << std::endl
+              << std::flush;
     auto mesh_instances = createScene();
     for (size_t i = 0; i < mesh_instances.size(); i++)
     {
@@ -263,6 +267,8 @@ int main(int argc, char **argv)
         int32_t texture_index = mesh_instances[i]->get_texture_index();
         if (texture_index >= 0)
         {
+            std::cout << "main::texture_init_uniforms, texture_index=" << texture_index << std::endl
+                      << std::flush;
             textures[texture_index]->init_uniforms(vk_device, descriptor_set, 5);
         }
     }

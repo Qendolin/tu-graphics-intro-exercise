@@ -94,5 +94,7 @@ void writeDescriptorSetImage(VkDevice vkDevice, VkDescriptorSet dst, uint32_t bi
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		.pImageInfo = &imageInfo,
 	};
+	std::cout << "writeDescriptorSetImage::vkUpdateDescriptorSets, sampler=" << sampler << ", view=" << view << std::endl
+			  << std::flush;
 	vkUpdateDescriptorSets(vkDevice, 1, &vkWriteDescriptorSet, 0, nullptr);
 }

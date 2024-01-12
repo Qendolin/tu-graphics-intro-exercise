@@ -23,6 +23,8 @@ void Texture::setSampler(VkSampler sampler)
 
 void Texture::init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
 {
+	std::cout << "init_uniforms::writeDescriptorSetImage" << std::endl
+			  << std::flush;
 	writeDescriptorSetImage(device, descriptor_set, binding, this->sampler, this->view);
 }
 
@@ -131,37 +133,20 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 
 	std::vector<VkBuffer> host_buffers;
 	std::vector<std::shared_ptr<Texture>> result;
-	std::cout << "createTextureImages::before_loop" << std::endl
-			  << std::flush;
 	for (auto &&name : names)
 	{
-		std::string rel_path = "assets/textures/" + name;
-		std::string path = gcgFindTextureFile(rel_path);
-		std::cout << "rel_path=" << rel_path << ", path=" << path << std::endl
-				  << std::flush;
-		std::cout << "createTextureImages::vklGetDdsImageInfo" << std::endl
-				  << std::flush;
+		std::string path = gcgFindTextureFile("assets/textures/" + name);
 		VklImageInfo img_info = vklGetDdsImageInfo(path.c_str());
 
 		uint32_t mipLevels = glm::log2((float)glm::max(img_info.extent.width, img_info.extent.width)) + 1;
-		std::cout << "createTextureImages::vectors" << std::endl
-				  << std::flush;
 		std::vector<VkBuffer> level_bufs(mipLevels);
 		std::vector<VklImageInfo> level_infos(mipLevels);
-		std::cout << "createTextureImages::before_inner_loop" << std::endl
-				  << std::flush;
 		for (size_t i = 0; i < mipLevels; i++)
 		{
-			std::cout << "createTextureImages::vklGetDdsImageLevelInfo" << std::endl
-					  << std::flush;
 			level_infos[i] = vklGetDdsImageLevelInfo(path.c_str(), i);
-			std::cout << "createTextureImages::vklLoadDdsImageLevelIntoHostCoherentBuffer" << std::endl
-					  << std::flush;
 			level_bufs[i] = vklLoadDdsImageLevelIntoHostCoherentBuffer(path.c_str(), i);
 			host_buffers.push_back(level_bufs[i]);
 		}
-		std::cout << "createTextureImages::loadImageToTexture" << std::endl
-				  << std::flush;
 		VkImage image = loadImageToTexture(vk_img_cmd_buf, queue_family, level_infos, level_bufs);
 
 		VkImageView image_view = VK_NULL_HANDLE;
@@ -180,8 +165,6 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 				.layerCount = 1,
 			},
 		};
-		std::cout << "createTextureImages::vkCreateImageView" << std::endl
-				  << std::flush;
 		error = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &image_view);
 		VKL_CHECK_VULKAN_ERROR(error);
 
@@ -198,6 +181,8 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
 		.flags = 0,
 	};
+	std::cout << "createTextureImages::vkCreateFence" << std::endl
+			  << std::flush;
 	error = vkCreateFence(vk_device, &vk_img_fence_create_info, nullptr, &vk_img_fence);
 	VKL_CHECK_VULKAN_ERROR(error);
 
@@ -207,19 +192,30 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		.pCommandBuffers = &vk_img_cmd_buf,
 	};
 
+	std::cout << "createTextureImages::vkQueueSubmit" << std::endl
+			  << std::flush;
 	error = vkQueueSubmit(vk_queue, 1, &vk_img_submit_info, vk_img_fence);
 	VKL_CHECK_VULKAN_ERROR(error);
 
+	std::cout << "createTextureImages::vkWaitForFences" << std::endl
+			  << std::flush;
 	error = vkWaitForFences(vk_device, 1, &vk_img_fence, VK_TRUE, UINT64_MAX);
 	VKL_CHECK_VULKAN_ERROR(error);
 
+	std::cout << "createTextureImages::vkDestroyCommandPool" << std::endl
+			  << std::flush;
 	vkDestroyCommandPool(vk_device, vk_img_cmd_pool, nullptr);
+	std::cout << "createTextureImages::vkDestroyFence" << std::endl
+			  << std::flush;
 	vkDestroyFence(vk_device, vk_img_fence, nullptr);
+	std::cout << "createTextureImages::vklDestroyHostCoherentBufferAndItsBackingMemory_loop" << std::endl
+			  << std::flush;
 	for (auto &&buf : host_buffers)
 	{
 		vklDestroyHostCoherentBufferAndItsBackingMemory(buf);
 	}
-
+	std::cout << "createTextureImages::return" << std::endl
+			  << std::flush;
 	return result;
 }
 
