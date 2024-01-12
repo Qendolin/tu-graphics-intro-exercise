@@ -292,7 +292,7 @@ std::unique_ptr<Mesh> create_cylinder_mesh(float radius, float height, int segme
 			};
 			glm::vec3 v = radius * n;
 			v.y = top ? height / 2 : -height / 2;
-			glm::vec2 uv = {(float)s / segments, 1.0 - half};
+			glm::vec2 uv = {1.0 - ((float)s / segments), 1.0 - half};
 
 			builder->vertex({v, color, n, uv});
 
@@ -310,9 +310,9 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 {
 	std::unique_ptr<MeshBuilder> builder = std::make_unique<MeshBuilder>();
 
-	builder->vertex({{0, -radius, 0}, color, {0, -1, 0}, {0.5, 0.0}});
+	builder->vertex({{0, -radius, 0}, color, {0, -1, 0}, {0.5, 1.0}});
 	uint32_t bot_cap_index = builder->index();
-	builder->vertex({{0, radius, 0}, color, {0, 1, 0}, {0.5, 1.0}});
+	builder->vertex({{0, radius, 0}, color, {0, 1, 0}, {0.5, 0.0}});
 	uint32_t top_cap_index = builder->index();
 
 	MeshBuilder::Cycle prev_cycle;
@@ -332,7 +332,7 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 				glm::sin(theta) * glm::sin(phi),
 			};
 			glm::vec3 v = radius * n;
-			glm::vec2 uv = {(float)s / segments, (float)r / rings};
+			glm::vec2 uv = {1.0 - ((float)s / segments), 1.0 - ((float)r / rings)};
 
 			builder->vertex({v, color, n, uv});
 
@@ -449,7 +449,7 @@ std::vector<CubeFace>
 	cube_faces = {
 		{
 			0, // Top
-			{7, 6, 2, 3},
+			{6, 7, 3, 2},
 		},
 		{
 			1, // Bottom
@@ -457,19 +457,19 @@ std::vector<CubeFace>
 		},
 		{
 			2, // Left
-			{0, 2, 6, 4},
+			{6, 2, 0, 4},
 		},
 		{
 			3, // Right
-			{7, 3, 1, 5},
+			{3, 7, 5, 1},
 		},
 		{
 			4, // Front
-			{3, 2, 0, 1},
+			{2, 3, 1, 0},
 		},
 		{
 			5, // Back
-			{4, 6, 7, 5},
+			{7, 6, 4, 5},
 		},
 };
 
