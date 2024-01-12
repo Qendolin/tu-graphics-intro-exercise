@@ -42,7 +42,7 @@ public:
 	void init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding);
 	void set_uniforms(CameraUniformBlock data);
 
-	void destroy();
+	void destroy(VkDevice device);
 };
 
 std::unique_ptr<Camera> createCamera(std::string init_path, GLFWwindow *window);

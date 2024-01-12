@@ -20,7 +20,7 @@ UniformBufferSlot SharedUniformBuffer::slot(uint32_t index)
 	return UniformBufferSlot{element_stride * index, element_size};
 }
 
-void SharedUniformBuffer::destroy()
+void SharedUniformBuffer::destroy(VkDevice device)
 {
 	vklDestroyHostCoherentBufferAndItsBackingMemory(buffer);
 }

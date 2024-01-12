@@ -40,7 +40,7 @@ public:
 	void bind(VkCommandBuffer cmd_buffer);
 	void draw(VkCommandBuffer cmd_buffer);
 
-	void destroy();
+	void destroy(VkDevice device);
 };
 
 class MeshInstance

@@ -121,7 +121,7 @@ void PipelineMatrixManager::load(PipelineMatrixManager::Shader shader, std::stri
 	matrix[shader] = createVkPipelineMatrix(pipelineParams, polygon_modes, culling_modes);
 }
 
-void PipelineMatrixManager::destroy()
+void PipelineMatrixManager::destroy(VkDevice device)
 {
 	destroyVkPipelineMatrix(matrix[0]);
 	destroyVkPipelineMatrix(matrix[1]);

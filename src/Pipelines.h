@@ -53,7 +53,7 @@ public:
 	PipelineMatrixManager();
 
 	void load(Shader shader, std::string vshName, std::string fshName);
-	void destroy();
+	void destroy(VkDevice device);
 	void set_polygon_mode(int mode);
 	void set_culling_mode(int mode);
 	void set_shader(Shader shader);

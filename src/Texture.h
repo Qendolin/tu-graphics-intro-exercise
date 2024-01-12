@@ -15,12 +15,14 @@ class Texture : public ITrash
 {
 private:
 	VkImage image;
+	VkImageView view;
+	VkSampler sampler;
 	VkFormat format;
 	VkExtent2D extent;
 
 public:
-	Texture(VkImage image, VkFormat format, VkExtent2D extent);
-	void destroy();
+	Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView view, VkSampler sampler);
+	void destroy(VkDevice device);
 };
 
 std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, std::vector<std::string> names);

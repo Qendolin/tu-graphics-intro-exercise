@@ -53,7 +53,7 @@ void Camera::set_uniforms(CameraUniformBlock data)
 		vklCopyDataIntoHostCoherentBuffer(uniform_buffer, &uniform_block, sizeof(uniform_block));
 }
 
-void Camera::destroy()
+void Camera::destroy(VkDevice device)
 {
 	vklDestroyHostCoherentBufferAndItsBackingMemory(uniform_buffer);
 }

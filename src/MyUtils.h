@@ -12,7 +12,7 @@ class ITrash
 {
 public:
 	virtual ~ITrash() {}
-	virtual void destroy() = 0;
+	virtual void destroy(VkDevice device) = 0;
 };
 
 struct UniformBufferSlot
@@ -33,7 +33,7 @@ public:
 	SharedUniformBuffer(VkPhysicalDevice device, VkDeviceSize element_size, uint32_t element_count);
 
 	UniformBufferSlot slot(uint32_t index);
-	void destroy();
+	void destroy(VkDevice device);
 };
 
 struct VkDetailedImage

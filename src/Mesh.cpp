@@ -13,7 +13,7 @@ Mesh::Mesh(std::vector<Vertex> vertices, std::vector<uint32_t> indices)
 	this->index_count = indices.size();
 }
 
-void Mesh::destroy()
+void Mesh::destroy(VkDevice device)
 {
 	vklDestroyHostCoherentBufferAndItsBackingMemory(vertices);
 	vklDestroyHostCoherentBufferAndItsBackingMemory(indices);

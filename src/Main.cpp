@@ -327,7 +327,7 @@ int main(int argc, char **argv)
     vklDestroyDeviceLocalImageAndItsBackingMemory(swapchain_depth_attachment.image);
     for (auto &&i : trash)
     {
-        i->destroy();
+        i->destroy(vk_device);
     }
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
