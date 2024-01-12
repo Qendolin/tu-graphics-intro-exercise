@@ -210,10 +210,10 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 	vkDestroyFence(vk_device, vk_img_fence, nullptr);
 	std::cout << "createTextureImages::vklDestroyHostCoherentBufferAndItsBackingMemory_loop" << std::endl
 			  << std::flush;
-	// for (auto &&buf : host_buffers)
-	// {
-	// 	vklDestroyHostCoherentBufferAndItsBackingMemory(buf);
-	// }
+	for (auto &&buf : host_buffers)
+	{
+		vklDestroyHostCoherentBufferAndItsBackingMemory(buf);
+	}
 	std::cout << "createTextureImages::return" << std::endl
 			  << std::flush;
 	return result;
