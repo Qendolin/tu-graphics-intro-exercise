@@ -29,9 +29,10 @@ void Texture::destroy(VkDevice device)
 }
 #pragma endregion
 
-VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, VklImageInfo img_info, VkBuffer img_host_buf)
+VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, std::vector<VklImageInfo> level_infos, std::vector<VkBuffer> level_host_bufs)
 {
-	VkImage vk_img = vklCreateDeviceLocalImageWithBackingMemory(img_info.extent.width, img_info.extent.height, img_info.imageFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	VkImage vk_img = vklCreateDeviceLocalImageWithBackingMemory(level_infos[0].extent.width, level_infos[0].extent.height, level_infos[0].imageFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+	uint32_t levelCount = level_infos.size();
 
 	VkImageMemoryBarrier2 vk_img_barrier_first = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -43,7 +44,7 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, Vk
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.baseMipLevel = 0,
-			.levelCount = 1,
+			.levelCount = levelCount,
 			.baseArrayLayer = 0,
 			.layerCount = 1,
 		},
@@ -56,16 +57,19 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, Vk
 	};
 	vkCmdPipelineBarrier2KHR(vk_cmd_buf, &vk_img_dep_info_first);
 
-	VkBufferImageCopy vk_img_copy_region = {
-		.imageSubresource = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel = 0,
-			.baseArrayLayer = 0,
-			.layerCount = 1,
-		},
-		.imageExtent = {.width = img_info.extent.width, .height = img_info.extent.height, .depth = 1},
-	};
-	vkCmdCopyBufferToImage(vk_cmd_buf, img_host_buf, vk_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &vk_img_copy_region);
+	for (uint32_t i = 0; i < levelCount; i++)
+	{
+		VkBufferImageCopy vk_img_copy_region = {
+			.imageSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = i,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+			.imageExtent = {.width = level_infos[i].extent.width, .height = level_infos[i].extent.height, .depth = 1},
+		};
+		vkCmdCopyBufferToImage(vk_cmd_buf, level_host_bufs[i], vk_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &vk_img_copy_region);
+	}
 
 	VkImageMemoryBarrier2 vk_img_barrier_second = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -77,7 +81,7 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, Vk
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.baseMipLevel = 0,
-			.levelCount = 1,
+			.levelCount = levelCount,
 			.baseArrayLayer = 0,
 			.layerCount = 1,
 		},
@@ -127,9 +131,18 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 	{
 		std::string path = "assets/textures/" + name;
 		VklImageInfo img_info = vklGetDdsImageInfo(path.c_str());
-		VkBuffer img_host_buf = vklLoadDdsImageIntoHostCoherentBuffer(path.c_str());
-		host_buffers.push_back(img_host_buf);
-		VkImage image = loadImageToTexture(vk_img_cmd_buf, queue_family, img_info, img_host_buf);
+
+		uint32_t mipLevels = glm::log2((float)glm::max(img_info.extent.width, img_info.extent.width)) + 1;
+		std::vector<VkBuffer> level_bufs(mipLevels);
+		std::vector<VklImageInfo> level_infos(mipLevels);
+		for (size_t i = 0; i < mipLevels; i++)
+		{
+			level_infos[i] = vklGetDdsImageLevelInfo(path.c_str(), i);
+			level_bufs[i] = vklLoadDdsImageLevelIntoHostCoherentBuffer(path.c_str(), i);
+			host_buffers.push_back(level_bufs[i]);
+		}
+		VkImage image = loadImageToTexture(vk_img_cmd_buf, queue_family, level_infos, level_bufs);
+
 		VkImageView image_view = VK_NULL_HANDLE;
 		VkImageViewCreateInfo image_view_create_info = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -141,7 +154,7 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 			.subresourceRange = {
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.baseMipLevel = 0,
-				.levelCount = 1,
+				.levelCount = mipLevels,
 				.baseArrayLayer = 0,
 				.layerCount = 1,
 			},
