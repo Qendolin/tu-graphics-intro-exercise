@@ -14,6 +14,8 @@
 #include "Descriptors.h"
 #include "Pipelines.h"
 #include "Input.h"
+#include "Texture.h"
+#include "vulkan_ext.h"
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
@@ -70,11 +72,11 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
         .material_factors = {0.1, 0.9, 0.3, 10.0},
     });
 
-    MeshInstance *sphere_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::Phong);
-    instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_1));
-    sphere_instance_1->set_uniforms({
+    MeshInstance *cube_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::Phong);
+    instances.push_back(std::unique_ptr<MeshInstance>(cube_instance_1));
+    cube_instance_1->set_uniforms({
         .color = {1.0, 0.0, 0.0, 1.0},
-        .model_matrix = glm::translate(glm::rotate(glm::mat4(1.0), glm::radians(45.0f), {0, 1, 0}), {-0.5, -0.8, 0.0}),
+        .model_matrix = glm::rotate(glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}), glm::radians(45.0f), {0, 1, 0}),
         .material_factors = {0.1, 0.9, 0.3, 10.0},
     });
 
@@ -131,6 +133,9 @@ int main(int argc, char **argv)
     VkPhysicalDevice vk_physical_device = createVkPhysicalDevice(vk_instance, vk_surface);
     uint32_t graphics_queue_family = selectQueueFamilyIndex(vk_physical_device, vk_surface);
     VkDevice vk_device = createVkDevice(vk_physical_device, graphics_queue_family);
+    load_vulkan_extensions(vk_device);
+    // PFN_vkCmdPipelineBarrier2KHR g_vkCmdPipelineBarrier2KHR;
+    // g_vkCmdPipelineBarrier2KHR = reinterpret_cast<PFN_vkCmdPipelineBarrier2KHR>(vkGetDeviceProcAddr(vk_device, "vkCmdPipelineBarrier2KHR"));
     VkQueue vk_queue = VK_NULL_HANDLE;
     vkGetDeviceQueue(vk_device, graphics_queue_family, 0, &vk_queue);
     std::vector<VkDetailedImage> swapchain_color_attachments;
@@ -226,6 +231,12 @@ int main(int argc, char **argv)
         .attenuation = {1.0, 0.4, 0.1, 0}};
     VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
+
+    auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds"});
+    for (auto &&tex : textures)
+    {
+        trash.push_back(tex);
+    }
 
     auto mesh_instances = createScene();
     for (size_t i = 0; i < mesh_instances.size(); i++)

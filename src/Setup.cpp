@@ -98,7 +98,7 @@ VkPhysicalDevice createVkPhysicalDevice(VkInstance vkInstance, VkSurfaceKHR vkSu
 VkDevice createVkDevice(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamily)
 {
 	float queuePriority = 1.0f;
-	const char *requiredDeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+	std::vector<const char *> requiredDeviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME};
 	const VkDeviceQueueCreateInfo queueCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
 		.queueFamilyIndex = queueFamily,
@@ -110,11 +110,17 @@ VkDevice createVkDevice(VkPhysicalDevice vkPhysicalDevice, uint32_t queueFamily)
 	};
 	VkDeviceCreateInfo deviceCreateInfo = {};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	deviceCreateInfo.enabledExtensionCount = 1;
-	deviceCreateInfo.ppEnabledExtensionNames = &requiredDeviceExtensions;
+	deviceCreateInfo.enabledExtensionCount = requiredDeviceExtensions.size();
+	deviceCreateInfo.ppEnabledExtensionNames = &requiredDeviceExtensions.front();
 	deviceCreateInfo.queueCreateInfoCount = 1;
 	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
 	deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+
+	const VkPhysicalDeviceSynchronization2Features vk_sync_feature = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+		.synchronization2 = VK_TRUE,
+	};
+	deviceCreateInfo.pNext = &vk_sync_feature;
 
 	VkDevice vkDevice = VK_NULL_HANDLE;
 	VkResult error = vkCreateDevice(vkPhysicalDevice, &deviceCreateInfo, nullptr, &vkDevice);
