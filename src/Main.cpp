@@ -75,34 +75,38 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     MeshInstance *cube_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::Phong);
     instances.push_back(std::unique_ptr<MeshInstance>(cube_instance_1));
     cube_instance_1->set_uniforms({
-        .color = {1.0, 0.0, 0.0, 1.0},
+        .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::rotate(glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}), glm::radians(45.0f), {0, 1, 0}),
-        .material_factors = {0.1, 0.9, 0.3, 10.0},
+        .material_factors = {0.1, 0.7, 0.1, 2.0},
     });
+    cube_instance_1->set_texture_index(0);
 
     MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh, PipelineMatrixManager::Shader::Phong);
     instances.push_back(std::unique_ptr<MeshInstance>(cylinder_instance));
     cylinder_instance->set_uniforms({
-        .color = {0.0, 1.0, 0.0, 1.0},
+        .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
-        .material_factors = {0.05, 0.8, 0.5, 5.0},
+        .material_factors = {0.1, 0.7, 0.1, 2.0},
     });
+    cylinder_instance->set_texture_index(0);
 
     MeshInstance *bezier_instance = new MeshInstance(bezier_mesh, PipelineMatrixManager::Shader::Phong);
     instances.push_back(std::unique_ptr<MeshInstance>(bezier_instance));
     bezier_instance->set_uniforms({
-        .color = {0.0, 1.0, 0.0, 1.0},
+        .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
-        .material_factors = {0.05, 0.8, 0.5, 5.0},
+        .material_factors = {0.1, 0.7, 0.3, 8.0},
     });
+    bezier_instance->set_texture_index(1);
 
     MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh, PipelineMatrixManager::Shader::Phong);
     instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_2));
     sphere_instance_2->set_uniforms({
-        .color = {1.0, 0.0, 0.0, 1.0},
+        .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
-        .material_factors = {0.1, 0.9, 0.3, 10.0},
+        .material_factors = {0.1, 0.7, 0.3, 8.0},
     });
+    sphere_instance_2->set_texture_index(1);
 
     return instances;
 }
@@ -256,7 +260,11 @@ int main(int argc, char **argv)
         writeDescriptorSetBuffer(vk_device, descriptor_set, 2, shader_constants_buffer, sizeof(shader_constants));
         writeDescriptorSetBuffer(vk_device, descriptor_set, 3, directional_light_buffer, sizeof(directional_light));
         writeDescriptorSetBuffer(vk_device, descriptor_set, 4, point_light_buffer, sizeof(point_light));
-        textures[0]->init_uniforms(vk_device, descriptor_set, 5);
+        int32_t texture_index = mesh_instances[i]->get_texture_index();
+        if (texture_index >= 0)
+        {
+            textures[texture_index]->init_uniforms(vk_device, descriptor_set, 5);
+        }
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);

@@ -150,8 +150,7 @@ void main()
 	diffuse += point_diffuse(N, L, u_point_light.attenuation) * u_point_light.color.rgb * u_point_light.color.a;
 	specular += point_specular(N, L, V, u_material_factors.w) * u_point_light.color.rgb * u_point_light.color.a;
 	
-	// vec3 diffuse_color = in_color.rgb;
-	vec3 diffuse_color = texture(diffuse_texture, in_uv).rgb;
+	vec3 diffuse_color = texture(diffuse_texture, in_uv).rgb * in_color.rgb;
 
 	vec3 I = vec3(0.0);
 	I += u_material_factors.x * ambient * diffuse_color;
