@@ -16,16 +16,11 @@ Texture::Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView 
 	this->view = view;
 }
 
-void Texture::setSampler(VkSampler sampler)
-{
-	this->sampler = sampler;
-}
-
-void Texture::init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding)
+void Texture::init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding, VkSampler sampler)
 {
 	std::cout << "init_uniforms::writeDescriptorSetImage" << std::endl
 			  << std::flush;
-	writeDescriptorSetImage(device, descriptor_set, binding, this->sampler, this->view);
+	writeDescriptorSetImage(device, descriptor_set, binding, sampler, this->view);
 }
 
 void Texture::destroy(VkDevice device)

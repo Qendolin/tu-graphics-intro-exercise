@@ -238,14 +238,13 @@ int main(int argc, char **argv)
     VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
 
-    VkSampler sampler = createSampler(vk_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR);
+    VkSampler texture_sampler = createSampler(vk_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR);
     auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds"});
     for (auto &&tex : textures)
     {
         std::cout << "main::init_texture " << tex << std::endl
                   << std::flush;
         trash.push_back(tex);
-        tex->setSampler(sampler);
     }
 
     std::cout << "main::createScene " << std::endl
@@ -269,7 +268,7 @@ int main(int argc, char **argv)
         {
             std::cout << "main::texture_init_uniforms, texture_index=" << texture_index << std::endl
                       << std::flush;
-            textures[texture_index]->init_uniforms(vk_device, descriptor_set, 5);
+            textures[texture_index]->init_uniforms(vk_device, descriptor_set, 5, texture_sampler);
         }
     }
 
@@ -379,7 +378,7 @@ int main(int argc, char **argv)
     {
         i->destroy(vk_device);
     }
-    vkDestroySampler(vk_device, sampler, nullptr);
+    vkDestroySampler(vk_device, texture_sampler, nullptr);
     gcgDestroyFramework();
     vkDestroySwapchainKHR(vk_device, vk_swapchain, nullptr);
     vkDestroyDevice(vk_device, nullptr);
