@@ -364,6 +364,8 @@ int main(int argc, char **argv)
             break;
         }
     }
+    std::cout << "main::after_render_loop" << std::endl
+              << std::flush;
 
     // Wait for all GPU work to finish before cleaning up:
     vkDeviceWaitIdle(vk_device);

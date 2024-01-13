@@ -55,7 +55,7 @@ VkInstance createVkInstance()
 	const char **required_glfw_extensions = glfwGetRequiredInstanceExtensions(&required_glfw_extensions_count);
 	const char **required_vulkan_extensions = vklGetRequiredInstanceExtensions(&required_vulkan_extension_count);
 
-	const char *enabled_layers[1] = {"VK_LAYER_KHRONOS_validation"};
+	const char *enabled_layers[] = {"VK_LAYER_KHRONOS_validation", "VK_LAYER_KHRONOS_synchronization2"};
 
 	std::vector<const char *> required_extensions;
 	required_extensions.insert(required_extensions.end(), required_glfw_extensions, required_glfw_extensions + required_glfw_extensions_count);

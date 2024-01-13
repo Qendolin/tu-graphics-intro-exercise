@@ -35,17 +35,21 @@ void Texture::destroy(VkDevice device)
 }
 #pragma endregion
 
-VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, std::vector<VklImageInfo> level_infos, std::vector<VkBuffer> level_host_bufs)
+VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, std::vector<VklImageInfo> level_infos, std::vector<VkBuffer> level_host_bufs)
 {
 	VkImage vk_img = vklCreateDeviceLocalImageWithBackingMemory(level_infos[0].extent.width, level_infos[0].extent.height, level_infos[0].imageFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 	uint32_t levelCount = level_infos.size();
 
 	VkImageMemoryBarrier2 vk_img_barrier_first = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		.srcAccessMask = 0,
+		.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		.srcQueueFamilyIndex = queue_family,
-		.dstQueueFamilyIndex = queue_family,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.image = vk_img,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -79,10 +83,14 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, uint32_t queue_family, st
 
 	VkImageMemoryBarrier2 vk_img_barrier_second = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
 		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		.srcQueueFamilyIndex = queue_family,
-		.dstQueueFamilyIndex = queue_family,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.image = vk_img,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -138,7 +146,7 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		std::string path = gcgFindTextureFile("assets/textures/" + name);
 		VklImageInfo img_info = vklGetDdsImageInfo(path.c_str());
 
-		uint32_t mipLevels = static_cast<uint32_t>(1 + std::floor(std::log2(std::max(img_info.extent.width, img_info.extent.height)))); // glm::log2((float)glm::max(img_info.extent.width, img_info.extent.width)) + 1;
+		uint32_t mipLevels = static_cast<uint32_t>(1 + std::floor(std::log2(std::max(img_info.extent.width, img_info.extent.height))));
 		std::vector<VkBuffer> level_bufs(mipLevels);
 		std::vector<VklImageInfo> level_infos(mipLevels);
 		for (size_t i = 0; i < mipLevels; i++)
@@ -147,7 +155,7 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 			level_bufs[i] = vklLoadDdsImageLevelIntoHostCoherentBuffer(path.c_str(), i);
 			host_buffers.push_back(level_bufs[i]);
 		}
-		VkImage image = loadImageToTexture(vk_img_cmd_buf, queue_family, level_infos, level_bufs);
+		VkImage image = loadImageToTexture(vk_img_cmd_buf, level_infos, level_bufs);
 
 		VkImageView image_view = VK_NULL_HANDLE;
 		VkImageViewCreateInfo image_view_create_info = {
