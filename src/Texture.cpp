@@ -138,7 +138,7 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		std::string path = gcgFindTextureFile("assets/textures/" + name);
 		VklImageInfo img_info = vklGetDdsImageInfo(path.c_str());
 
-		uint32_t mipLevels = glm::log2((float)glm::max(img_info.extent.width, img_info.extent.width)) + 1;
+		uint32_t mipLevels = static_cast<uint32_t>(1 + std::floor(std::log2(std::max(img_info.extent.width, img_info.extent.height)))); // glm::log2((float)glm::max(img_info.extent.width, img_info.extent.width)) + 1;
 		std::vector<VkBuffer> level_bufs(mipLevels);
 		std::vector<VklImageInfo> level_infos(mipLevels);
 		for (size_t i = 0; i < mipLevels; i++)
