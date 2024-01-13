@@ -138,8 +138,6 @@ int main(int argc, char **argv)
     uint32_t graphics_queue_family = selectQueueFamilyIndex(vk_physical_device, vk_surface);
     VkDevice vk_device = createVkDevice(vk_physical_device, graphics_queue_family);
     load_vulkan_extensions(vk_device);
-    // PFN_vkCmdPipelineBarrier2KHR g_vkCmdPipelineBarrier2KHR;
-    // g_vkCmdPipelineBarrier2KHR = reinterpret_cast<PFN_vkCmdPipelineBarrier2KHR>(vkGetDeviceProcAddr(vk_device, "vkCmdPipelineBarrier2KHR"));
     VkQueue vk_queue = VK_NULL_HANDLE;
     vkGetDeviceQueue(vk_device, graphics_queue_family, 0, &vk_queue);
     std::vector<VkDetailedImage> swapchain_color_attachments;
