@@ -201,7 +201,7 @@ int main(int argc, char **argv)
     std::shared_ptr<SharedUniformBuffer> uniform_buffer(new SharedUniformBuffer(vk_physical_device, sizeof(MeshInstanceUniformBlock), 20));
     trash.push_back(uniform_buffer);
 
-    VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 20, 20 * 2);
+    VkDescriptorPool vk_descriptor_pool = createVkDescriptorPool(vk_device, 20, 20 * 5);
     VkDescriptorSetLayout vk_descriptor_set_layout = createVkDescriptorSetLayout(
         vk_device,
         {{.binding = 0,
