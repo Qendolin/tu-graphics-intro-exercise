@@ -259,7 +259,7 @@ void append_circle_cap(MeshBuilder &builder, float radius, int segments, glm::ve
 			glm::sin(phi),
 		};
 		glm::vec3 v = pos + radius * spoke;
-		glm::vec2 uv = {spoke.x, spoke.z};
+		glm::vec2 uv = {spoke.x * radius * 2.0f, spoke.z * radius * 2.0f};
 		uv = uv * 0.5f + 0.5f;
 
 		builder.vertex({v, color, normal, uv});
@@ -276,13 +276,13 @@ std::unique_ptr<Mesh> create_cylinder_mesh(float radius, float height, int segme
 	append_circle_cap(*builder, radius, segments, {0, height / 2, 0}, color, {0, 1, 0});
 	builder->winding(false);
 
-	MeshBuilder::Cycle bot_cycle = builder->start_cycle(segments);
+	MeshBuilder::Cycle bot_cycle = builder->start_cycle(segments + 1);
 	MeshBuilder::Cycle top_cycle;
 
 	for (int half = 0; half < 2; half++)
 	{
 		bool top = half == 1;
-		for (int s = 0; s < segments; s++)
+		for (int s = 0; s <= segments; s++)
 		{
 			float phi = glm::two_pi<float>() * s / segments;
 			glm::vec3 n = {
@@ -300,7 +300,7 @@ std::unique_ptr<Mesh> create_cylinder_mesh(float radius, float height, int segme
 				builder->quad(top_cycle.rel(s), top_cycle.rel(s + 1), bot_cycle.rel(s), bot_cycle.rel(s + 1));
 		}
 		if (!top)
-			top_cycle = builder->start_cycle(segments);
+			top_cycle = builder->start_cycle(segments + 1);
 	}
 
 	return builder->build();
@@ -310,10 +310,12 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 {
 	std::unique_ptr<MeshBuilder> builder = std::make_unique<MeshBuilder>();
 
-	builder->vertex({{0, -radius, 0}, color, {0, -1, 0}, {0.5, 1.0}});
-	uint32_t bot_cap_index = builder->index();
-	builder->vertex({{0, radius, 0}, color, {0, 1, 0}, {0.5, 0.0}});
-	uint32_t top_cap_index = builder->index();
+	uint32_t cap_index = 0;
+	for (int s = 0; s <= segments; s++)
+	{
+		builder->vertex({{0, -radius, 0}, color, {0, -1, 0}, {1.0 - ((float)s / segments), 1.0}});
+		builder->vertex({{0, radius, 0}, color, {0, 1, 0}, {1.0 - ((float)s / segments), 0.0}});
+	}
 
 	MeshBuilder::Cycle prev_cycle;
 	for (int r = 1; r < rings; r++)
@@ -321,8 +323,8 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 		bool cap = r == 1 || r == rings - 1;
 		bool top_cap = r == rings - 1;
 		float theta = glm::pi<float>() * r / rings;
-		auto curr_cycle = builder->start_cycle(segments);
-		for (int s = 0; s < segments; s++)
+		auto curr_cycle = builder->start_cycle(segments + 1);
+		for (int s = 0; s <= segments; s++)
 		{
 			float phi = glm::two_pi<float>() * s / segments;
 
@@ -338,10 +340,7 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 
 			if (cap)
 			{
-				if (top_cap)
-					builder->tri(top_cap_index, curr_cycle.rel(s + 1), curr_cycle.rel(s));
-				else
-					builder->tri(bot_cap_index, curr_cycle.rel(s), curr_cycle.rel(s + 1));
+				builder->tri(cap_index + s * 2 + top_cap, curr_cycle.rel(s + 1), curr_cycle.rel(s));
 			}
 			if (r > 1)
 			{
@@ -384,14 +383,14 @@ std::unique_ptr<Mesh> create_bezier_mesh(std::unique_ptr<BezierCurve> curve, glm
 		glm::vec3 p = curve->value_at(f);
 		glm::vec3 tan = glm::normalize(curve->tanget_at(f));
 		glm::vec3 bitan = glm::normalize(glm::cross(tan, up));
-		auto curr_cycle = builder->start_cycle(segments);
+		auto curr_cycle = builder->start_cycle(segments + 1);
 
 		if (r > 0)
 		{
 			len += glm::distance(prev_p, p);
 		}
 
-		for (int s = 0; s < segments; s++)
+		for (int s = 0; s <= segments; s++)
 		{
 			float phi = glm::two_pi<float>() * s / segments;
 			glm::vec3 n = glm::mat3(glm::rotate(glm::mat4(1.0), phi, tan)) * bitan;
