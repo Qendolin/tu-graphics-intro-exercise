@@ -72,30 +72,32 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
         .material_factors = {0.1, 0.9, 0.3, 10.0},
     });
 
-    MeshInstance *cube_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::Phong);
+    MeshInstance *cube_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::PhongSpec);
     instances.push_back(std::unique_ptr<MeshInstance>(cube_instance_1));
     cube_instance_1->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::rotate(glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}), glm::radians(45.0f), {0, 1, 0}),
-        .material_factors = {0.1, 0.7, 0.1, 2.0},
+        .material_factors = {0.1, 1.0, 1.0, 20.0},
     });
     cube_instance_1->set_diffuse_index(0);
+    cube_instance_1->set_specular_index(3);
 
-    MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh, PipelineMatrixManager::Shader::Phong);
+    MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh, PipelineMatrixManager::Shader::PhongSpec);
     instances.push_back(std::unique_ptr<MeshInstance>(cylinder_instance));
     cylinder_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
-        .material_factors = {0.1, 0.7, 0.1, 2.0},
+        .material_factors = {0.1, 1.0, 1.0, 20.0},
     });
     cylinder_instance->set_diffuse_index(0);
+    cylinder_instance->set_specular_index(3);
 
     MeshInstance *bezier_instance = new MeshInstance(bezier_mesh, PipelineMatrixManager::Shader::PhongSpec);
     instances.push_back(std::unique_ptr<MeshInstance>(bezier_instance));
     bezier_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
-        .material_factors = {0.1, 0.3, 0.7, 8.0},
+        .material_factors = {0.1, 1.0, 1.0, 8.0},
     });
     bezier_instance->set_diffuse_index(1);
     bezier_instance->set_specular_index(2);
@@ -105,7 +107,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     sphere_instance_2->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
-        .material_factors = {0.1, 0.3, 0.7, 8.0},
+        .material_factors = {0.1, 1.0, 1.0, 8.0},
     });
     sphere_instance_2->set_diffuse_index(1);
     sphere_instance_2->set_specular_index(2);
@@ -241,7 +243,7 @@ int main(int argc, char **argv)
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
 
     VkSampler texture_sampler = createSampler(vk_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR);
-    auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds", "tiles_specular.dds"});
+    auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds", "tiles_specular.dds", "wood_texture_specular.dds"});
     for (auto &&tex : textures)
     {
         trash.push_back(tex);
