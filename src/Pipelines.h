@@ -31,7 +31,8 @@ public:
 	{
 		Phong,
 		Gouraud,
-		Box
+		Box,
+		PhongSpec
 	};
 
 private:
@@ -47,7 +48,7 @@ private:
 	int polygon_mode = 0;
 	int culling_mode = 0;
 	Shader shader = Shader::Phong;
-	std::array<std::vector<std::vector<VkPipeline>>, 3> matrix;
+	std::array<std::vector<std::vector<VkPipeline>>, 4> matrix;
 
 public:
 	PipelineMatrixManager();

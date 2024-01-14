@@ -77,6 +77,12 @@ VkPipeline createVkPipeline(PipelineParams &params)
 								 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 								 .descriptorCount = 1,
 								 .stageFlags = VK_SHADER_STAGE_ALL,
+							 },
+							 {
+								 .binding = 6,
+								 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+								 .descriptorCount = 1,
+								 .stageFlags = VK_SHADER_STAGE_ALL,
 							 }},
 	};
 	return vklCreateGraphicsPipeline(graphics_pipeline_config);
@@ -132,6 +138,7 @@ void PipelineMatrixManager::destroy(VkDevice device)
 	destroyVkPipelineMatrix(matrix[0]);
 	destroyVkPipelineMatrix(matrix[1]);
 	destroyVkPipelineMatrix(matrix[2]);
+	destroyVkPipelineMatrix(matrix[3]);
 }
 
 void PipelineMatrixManager::set_polygon_mode(int mode)
@@ -172,6 +179,7 @@ std::unique_ptr<PipelineMatrixManager> createPipelineManager(INIReader renderer_
 	manager->load(PipelineMatrixManager::Box, "box.vert", "box.frag");
 	manager->load(PipelineMatrixManager::Phong, "phong.vert", "phong.frag");
 	manager->load(PipelineMatrixManager::Gouraud, "gouraud.vert", "gouraud.frag");
+	manager->load(PipelineMatrixManager::PhongSpec, "phong.vert", "phong_spec.frag");
 
 	bool as_wireframe = renderer_reader.GetBoolean("renderer", "wireframe", false);
 	if (as_wireframe)

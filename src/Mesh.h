@@ -55,7 +55,8 @@ private:
 	VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
 	UniformBufferSlot uniform_slot = {};
 	PipelineMatrixManager::Shader shader = PipelineMatrixManager::Shader::Phong;
-	int32_t texture_index = -1;
+	int32_t diffuse_index = -1;
+	int32_t specular_index = -1;
 
 public:
 	std::shared_ptr<Mesh> mesh = nullptr;
@@ -70,13 +71,21 @@ public:
 	{
 		return shader;
 	}
-	void set_texture_index(int32_t index)
+	void set_diffuse_index(int32_t index)
 	{
-		this->texture_index = index;
+		this->diffuse_index = index;
 	}
-	int32_t get_texture_index()
+	int32_t get_diffuse_index()
 	{
-		return this->texture_index;
+		return this->diffuse_index;
+	}
+	void set_specular_index(int32_t index)
+	{
+		this->specular_index = index;
+	}
+	int32_t get_specular_index()
+	{
+		return this->specular_index;
 	}
 };
 

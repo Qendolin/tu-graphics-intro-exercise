@@ -79,7 +79,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
         .model_matrix = glm::rotate(glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}), glm::radians(45.0f), {0, 1, 0}),
         .material_factors = {0.1, 0.7, 0.1, 2.0},
     });
-    cube_instance_1->set_texture_index(0);
+    cube_instance_1->set_diffuse_index(0);
 
     MeshInstance *cylinder_instance = new MeshInstance(cylinder_mesh, PipelineMatrixManager::Shader::Phong);
     instances.push_back(std::unique_ptr<MeshInstance>(cylinder_instance));
@@ -88,25 +88,27 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
         .material_factors = {0.1, 0.7, 0.1, 2.0},
     });
-    cylinder_instance->set_texture_index(0);
+    cylinder_instance->set_diffuse_index(0);
 
-    MeshInstance *bezier_instance = new MeshInstance(bezier_mesh, PipelineMatrixManager::Shader::Phong);
+    MeshInstance *bezier_instance = new MeshInstance(bezier_mesh, PipelineMatrixManager::Shader::PhongSpec);
     instances.push_back(std::unique_ptr<MeshInstance>(bezier_instance));
     bezier_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
-        .material_factors = {0.1, 0.7, 0.3, 8.0},
+        .material_factors = {0.1, 0.3, 0.7, 8.0},
     });
-    bezier_instance->set_texture_index(1);
+    bezier_instance->set_diffuse_index(1);
+    bezier_instance->set_specular_index(2);
 
-    MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh, PipelineMatrixManager::Shader::Phong);
+    MeshInstance *sphere_instance_2 = new MeshInstance(sphere_mesh, PipelineMatrixManager::Shader::PhongSpec);
     instances.push_back(std::unique_ptr<MeshInstance>(sphere_instance_2));
     sphere_instance_2->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
-        .material_factors = {0.1, 0.7, 0.3, 8.0},
+        .material_factors = {0.1, 0.3, 0.7, 8.0},
     });
-    sphere_instance_2->set_texture_index(1);
+    sphere_instance_2->set_diffuse_index(1);
+    sphere_instance_2->set_specular_index(2);
 
     return instances;
 }
@@ -215,6 +217,8 @@ int main(int argc, char **argv)
          {.binding = 4,
           .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER},
          {.binding = 5,
+          .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+         {.binding = 6,
           .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER}});
 
     ShaderConstantsUniformBlock shader_constants = {
@@ -237,16 +241,12 @@ int main(int argc, char **argv)
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
 
     VkSampler texture_sampler = createSampler(vk_device, VK_FILTER_LINEAR, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR);
-    auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds"});
+    auto textures = createTextureImages(vk_device, vk_queue, graphics_queue_family, {"wood_texture.dds", "tiles_diffuse.dds", "tiles_specular.dds"});
     for (auto &&tex : textures)
     {
-        std::cout << "main::init_texture " << tex << std::endl
-                  << std::flush;
         trash.push_back(tex);
     }
 
-    std::cout << "main::createScene " << std::endl
-              << std::flush;
     auto mesh_instances = createScene();
     for (size_t i = 0; i < mesh_instances.size(); i++)
     {
@@ -261,17 +261,14 @@ int main(int argc, char **argv)
         writeDescriptorSetBuffer(vk_device, descriptor_set, 2, shader_constants_buffer, sizeof(shader_constants));
         writeDescriptorSetBuffer(vk_device, descriptor_set, 3, directional_light_buffer, sizeof(directional_light));
         writeDescriptorSetBuffer(vk_device, descriptor_set, 4, point_light_buffer, sizeof(point_light));
-        int32_t texture_index = mesh_instances[i]->get_texture_index();
-        if (texture_index >= 0)
-        {
-            std::cout << "main::texture_init_uniforms, texture_index=" << texture_index << std::endl
-                      << std::flush;
-            textures[texture_index]->init_uniforms(vk_device, descriptor_set, 5, texture_sampler);
-        }
+        int32_t diffuse_index = mesh_instances[i]->get_diffuse_index();
+        if (diffuse_index >= 0)
+            textures[diffuse_index]->init_uniforms(vk_device, descriptor_set, 5, texture_sampler);
+        int32_t specular_index = mesh_instances[i]->get_specular_index();
+        if (specular_index >= 0)
+            textures[specular_index]->init_uniforms(vk_device, descriptor_set, 6, texture_sampler);
     }
 
-    std::cout << "main::vklEnablePipelineHotReloading" << std::endl
-              << std::flush;
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
 
     while (!glfwWindowShouldClose(window))
@@ -300,52 +297,27 @@ int main(int argc, char **argv)
         pipelines->update();
         controls->update();
 
-        std::cout << "main::vklWaitForNextSwapchainImage" << std::endl
-                  << std::flush;
         vklWaitForNextSwapchainImage();
-
-        std::cout << "main::vklStartRecordingCommands" << std::endl
-                  << std::flush;
         vklStartRecordingCommands();
         VkCommandBuffer vk_cmd_buffer = vklGetCurrentCommandBuffer();
 
-        std::cout << "main::mesh_loop" << std::endl
-                  << std::flush;
         for (auto &&i : mesh_instances)
         {
-            std::cout << "main::set_shader" << std::endl
-                      << std::flush;
             pipelines->set_shader(i->get_shader());
             VkPipeline vk_selected_pipeline = pipelines->selected();
-            std::cout << "main::vklCmdBindPipeline" << std::endl
-                      << std::flush;
             vklCmdBindPipeline(vk_cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_selected_pipeline);
-            std::cout << "main::vklGetLayoutForPipeline" << std::endl
-                      << std::flush;
             VkPipelineLayout vk_pipeline_layout = vklGetLayoutForPipeline(vk_selected_pipeline);
 
-            std::cout << "main::bind_uniforms" << std::endl
-                      << std::flush;
             i->bind_uniforms(vk_cmd_buffer, vk_pipeline_layout);
-            std::cout << "main::mesh_bind" << std::endl
-                      << std::flush;
             i->mesh->bind(vk_cmd_buffer);
-            std::cout << "main::mesh_draw" << std::endl
-                      << std::flush;
             i->mesh->draw(vk_cmd_buffer);
         }
 
-        std::cout << "main::vklEndRecordingCommands" << std::endl
-                  << std::flush;
         vklEndRecordingCommands();
-        std::cout << "main::vklPresentCurrentSwapchainImage" << std::endl
-                  << std::flush;
         vklPresentCurrentSwapchainImage();
 
         if (cmdline_args.run_headless)
         {
-            std::cout << "main::vklGetCurrentSwapChainImageIndex" << std::endl
-                      << std::flush;
             uint32_t idx = vklGetCurrentSwapChainImageIndex();
             std::string screenshot_filename = "screenshot";
             if (cmdline_args.set_filename)
@@ -353,16 +325,12 @@ int main(int argc, char **argv)
 
             int width, height;
             glfwGetFramebufferSize(window, &width, &height);
-            std::cout << "main::gcgSaveScreenshot" << std::endl
-                      << std::flush;
             gcgSaveScreenshot(screenshot_filename, swapchain_color_attachments[idx].image, width,
                               height, vk_surface_image_format.format, vk_device, vk_physical_device, vk_queue,
                               graphics_queue_family);
             break;
         }
     }
-    std::cout << "main::after_render_loop" << std::endl
-              << std::flush;
 
     // Wait for all GPU work to finish before cleaning up:
     vkDeviceWaitIdle(vk_device);

@@ -37,6 +37,7 @@ layout(set = 0, binding = 1) uniform ModelUniforms
 };
 
 layout (binding = 5) uniform sampler2D diffuse_texture;
+layout (binding = 6) uniform sampler2D specular_texture;
 
 float point_diffuse(vec3 N, vec3 L, vec4 a)
 {
@@ -152,10 +153,12 @@ void main()
 	
 	vec3 diffuse_color = texture(diffuse_texture, in_uv).rgb * in_color.rgb;
 
+	float kS = u_material_factors.z * texture(specular_texture, in_uv).r;
+
 	vec3 I = vec3(0.0);
 	I += u_material_factors.x * ambient * diffuse_color;
 	I += u_material_factors.y * diffuse * diffuse_color;
-	I += u_material_factors.z * specular;
-	I += u_material_factors.z * getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N)) * fresnel_schlick(N, V, 1.5);
+	I += kS * specular;
+	I += kS * getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N)) * fresnel_schlick(N, V, 1.5);
 	out_color.rgb = I;
 }
