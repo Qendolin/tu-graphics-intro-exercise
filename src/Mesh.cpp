@@ -261,6 +261,7 @@ void append_circle_cap(MeshBuilder &builder, float radius, int segments, glm::ve
 		glm::vec3 v = pos + radius * spoke;
 		glm::vec2 uv = {spoke.x, spoke.z};
 		uv = uv * 0.5f + 0.5f;
+		uv.y = 1.0 - uv.y;
 
 		builder.vertex({v, color, normal, uv});
 		builder.tri(center_index, cycle.rel(s), cycle.rel(s + 1));
@@ -453,7 +454,7 @@ std::vector<CubeFace>
 		},
 		{
 			1, // Bottom
-			{0, 4, 5, 1},
+			{0, 1, 5, 4},
 		},
 		{
 			2, // Left
@@ -496,7 +497,7 @@ std::unique_ptr<Mesh> create_cube_mesh(float width, float height, float depth, g
 		vertices[i * 4 + 1] = {positions[verts[1]], color, cube_face_normals[i], cube_uvs[1]};
 		vertices[i * 4 + 2] = {positions[verts[2]], color, cube_face_normals[i], cube_uvs[2]};
 		vertices[i * 4 + 3] = {positions[verts[3]], color, cube_face_normals[i], cube_uvs[3]};
-		indices.insert(indices.end(), {index + 0, index + 1, index + 2, index + 2, index + 3, index + 0});
+		indices.insert(indices.end(), {index + 0, index + 2, index + 1, index + 2, index + 0, index + 3});
 		index += 4;
 	}
 
