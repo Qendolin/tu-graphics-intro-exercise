@@ -264,11 +264,13 @@ int main(int argc, char **argv)
         writeDescriptorSetBuffer(vk_device, descriptor_set, 3, directional_light_buffer, sizeof(directional_light));
         writeDescriptorSetBuffer(vk_device, descriptor_set, 4, point_light_buffer, sizeof(point_light));
         int32_t diffuse_index = mesh_instances[i]->get_diffuse_index();
-        if (diffuse_index >= 0)
-            textures[diffuse_index]->init_uniforms(vk_device, descriptor_set, 5, texture_sampler);
+        if (diffuse_index == -1)
+            diffuse_index = 0;
+        textures[diffuse_index]->init_uniforms(vk_device, descriptor_set, 5, texture_sampler);
         int32_t specular_index = mesh_instances[i]->get_specular_index();
-        if (specular_index >= 0)
-            textures[specular_index]->init_uniforms(vk_device, descriptor_set, 6, texture_sampler);
+        if (specular_index == -1)
+            specular_index = 0;
+        textures[specular_index]->init_uniforms(vk_device, descriptor_set, 6, texture_sampler);
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);
