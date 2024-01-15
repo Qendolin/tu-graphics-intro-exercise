@@ -18,8 +18,6 @@ Texture::Texture(VkImage image, VkFormat format, VkExtent2D extent, VkImageView 
 
 void Texture::init_uniforms(VkDevice device, VkDescriptorSet descriptor_set, uint32_t binding, VkSampler sampler)
 {
-	std::cout << "init_uniforms::writeDescriptorSetImage" << std::endl
-			  << std::flush;
 	writeDescriptorSetImage(device, descriptor_set, binding, sampler, this->view);
 }
 
@@ -173,9 +171,6 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 
 		result.push_back(std::make_shared<Texture>(image, img_info.imageFormat, img_info.extent, image_view));
 	}
-	std::cout << "createTextureImages::after_loop" << std::endl
-			  << std::flush;
-
 	error = vkEndCommandBuffer(vk_img_cmd_buf);
 	VKL_CHECK_VULKAN_ERROR(error);
 
@@ -184,8 +179,6 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
 		.flags = 0,
 	};
-	std::cout << "createTextureImages::vkCreateFence" << std::endl
-			  << std::flush;
 	error = vkCreateFence(vk_device, &vk_img_fence_create_info, nullptr, &vk_img_fence);
 	VKL_CHECK_VULKAN_ERROR(error);
 
@@ -195,30 +188,18 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 		.pCommandBuffers = &vk_img_cmd_buf,
 	};
 
-	std::cout << "createTextureImages::vkQueueSubmit" << std::endl
-			  << std::flush;
 	error = vkQueueSubmit(vk_queue, 1, &vk_img_submit_info, vk_img_fence);
 	VKL_CHECK_VULKAN_ERROR(error);
 
-	std::cout << "createTextureImages::vkWaitForFences" << std::endl
-			  << std::flush;
 	error = vkWaitForFences(vk_device, 1, &vk_img_fence, VK_TRUE, UINT64_MAX);
 	VKL_CHECK_VULKAN_ERROR(error);
 
-	std::cout << "createTextureImages::vkDestroyCommandPool" << std::endl
-			  << std::flush;
 	vkDestroyCommandPool(vk_device, vk_img_cmd_pool, nullptr);
-	std::cout << "createTextureImages::vkDestroyFence" << std::endl
-			  << std::flush;
 	vkDestroyFence(vk_device, vk_img_fence, nullptr);
-	std::cout << "createTextureImages::vklDestroyHostCoherentBufferAndItsBackingMemory_loop" << std::endl
-			  << std::flush;
 	for (auto &&buf : host_buffers)
 	{
 		vklDestroyHostCoherentBufferAndItsBackingMemory(buf);
 	}
-	std::cout << "createTextureImages::return" << std::endl
-			  << std::flush;
 	return result;
 }
 
