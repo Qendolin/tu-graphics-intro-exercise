@@ -341,7 +341,10 @@ std::unique_ptr<Mesh> create_sphere_mesh(float radius, int rings, int segments, 
 
 			if (cap)
 			{
-				builder->tri(cap_index + s * 2 + top_cap, curr_cycle.rel(s + 1), curr_cycle.rel(s));
+				if (top_cap)
+					builder->tri(cap_index + s * 2 + 1, curr_cycle.rel(s + 1), curr_cycle.rel(s));
+				else
+					builder->tri(cap_index + s * 2, curr_cycle.rel(s), curr_cycle.rel(s + 1));
 			}
 			if (r > 1)
 			{
