@@ -26,4 +26,5 @@ public:
 };
 
 std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, std::vector<std::string> names);
+std::shared_ptr<Texture> createTextureCubeMap(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, const std::array<std::string, 6> &names);
 VkSampler createSampler(VkDevice vk_device, VkFilter minFilter, VkFilter magFilter, VkSamplerMipmapMode mipmapMode);

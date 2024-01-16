@@ -52,7 +52,7 @@ struct PointLightUniformBlock
 
 std::vector<std::unique_ptr<MeshInstance>> createScene()
 {
-    std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
+    // std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
     std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> cylinder_mesh(create_cylinder_mesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> sphere_mesh(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
@@ -64,20 +64,20 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     std::shared_ptr<Mesh> bezier_mesh(create_bezier_mesh(std::move(bezeier_curve), {0, 0, -1}, 0.2, 42, 18, {1.0, 1.0, 1.0}));
 
     std::vector<std::unique_ptr<MeshInstance>> instances;
-    MeshInstance *cornell_instance = new MeshInstance(cornell_mesh, PipelineMatrixManager::Shader::Box);
-    instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
-    cornell_instance->set_uniforms({
-        .color = {1.0, 1.0, 1.0, 1.0},
-        .model_matrix = glm::mat4(1.0),
-        .material_factors = {0.1, 0.9, 0.3, 10.0},
-    });
+    // MeshInstance *cornell_instance = new MeshInstance(cornell_mesh, PipelineMatrixManager::Shader::Box);
+    // instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
+    // cornell_instance->set_uniforms({
+    //     .color = {1.0, 1.0, 1.0, 1.0},
+    //     .model_matrix = glm::mat4(1.0),
+    //     .material_factors = {0.1, 0.9, 0.3, 10.0},
+    // });
 
     MeshInstance *cube_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::PhongSpec);
     instances.push_back(std::unique_ptr<MeshInstance>(cube_instance_1));
     cube_instance_1->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::rotate(glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}), glm::radians(45.0f), {0, 1, 0}),
-        .material_factors = {0.1, 1.0, 1.0, 20.0},
+        .material_factors = {0.1, 0.7, 0.3, 20.0},
     });
     cube_instance_1->set_diffuse_index(0);
     cube_instance_1->set_specular_index(3);
@@ -87,7 +87,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     cylinder_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
-        .material_factors = {0.1, 1.0, 1.0, 20.0},
+        .material_factors = {0.1, 0.7, 0.3, 20.0},
     });
     cylinder_instance->set_diffuse_index(0);
     cylinder_instance->set_specular_index(3);
@@ -97,7 +97,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     bezier_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
-        .material_factors = {0.1, 1.0, 1.0, 8.0},
+        .material_factors = {0.1, 0.7, 0.3, 8.0},
     });
     bezier_instance->set_diffuse_index(1);
     bezier_instance->set_specular_index(2);
@@ -107,7 +107,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     sphere_instance_2->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
-        .material_factors = {0.1, 1.0, 1.0, 8.0},
+        .material_factors = {0.1, 0.7, 0.3, 8.0},
     });
     sphere_instance_2->set_diffuse_index(1);
     sphere_instance_2->set_specular_index(2);
@@ -221,6 +221,8 @@ int main(int argc, char **argv)
          {.binding = 5,
           .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
          {.binding = 6,
+          .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+         {.binding = 7,
           .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER}});
 
     ShaderConstantsUniformBlock shader_constants = {
@@ -249,6 +251,9 @@ int main(int argc, char **argv)
         trash.push_back(tex);
     }
 
+    std::shared_ptr<Texture> environment_texture = createTextureCubeMap(vk_device, vk_queue, graphics_queue_family, {"cubemap/posx.dds", "cubemap/negx.dds", "cubemap/posy.dds", "cubemap/negy.dds", "cubemap/posz.dds", "cubemap/negz.dds"});
+    trash.push_back(environment_texture);
+
     auto mesh_instances = createScene();
     for (size_t i = 0; i < mesh_instances.size(); i++)
     {
@@ -271,6 +276,7 @@ int main(int argc, char **argv)
         if (specular_index == -1)
             specular_index = 0;
         textures[specular_index]->init_uniforms(vk_device, descriptor_set, 6, texture_sampler);
+        environment_texture->init_uniforms(vk_device, descriptor_set, 7, texture_sampler);
     }
 
     vklEnablePipelineHotReloading(window, GLFW_KEY_F5);

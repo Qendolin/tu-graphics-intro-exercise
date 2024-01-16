@@ -38,6 +38,7 @@ layout(set = 0, binding = 1) uniform ModelUniforms
 
 layout (binding = 5) uniform sampler2D diffuse_texture;
 layout (binding = 6) uniform sampler2D specular_texture;
+layout (binding = 7) uniform samplerCube evironment_texture;
 
 float point_diffuse(vec3 N, vec3 L, vec4 a)
 {
@@ -73,47 +74,6 @@ float fresnel_schlick(vec3 N, vec3 V, float ior)
 	float cosTheta = dot(N, normalize(V));
 	if(cosTheta < 0.0) return 0.0;
 	return R0 + (1.0 - R0) * pow(max(0.0, 1.0 - cosTheta), 5.0);
-}
-
-vec3 getCornellBoxReflectionColor(vec3 positionWS, vec3 directionWS)
-{
-	vec3 P0 = positionWS;
-	vec3 V = normalize(directionWS);
-	const float boxSize = 1.5;
-	vec4[5] planes = {
-		vec4(-1.0, 0.0, 0.0, -boxSize), // left
-		vec4(1.0, 0.0, 0.0, -boxSize),	// right
-		vec4(0.0, 1.0, 0.0, -boxSize),	// top
-		vec4(0.0, -1.0, 0.0, -boxSize), // bottom
-		vec4(0.0, 0.0, -1.0, -boxSize)	// back
-	};
-	vec3[5] colors = {
-		vec3(1.0, 0.0, 0.0),	// left
-		vec3(0.0, 1.0, 0.0),	// right
-		vec3(0.96, 0.93, 0.85), // top
-		vec3(0.64, 0.64, 0.64), // bottom
-		vec3(0.76, 0.74, 0.68)	// back
-	};
-	for (int i = 0; i < 5; ++i)
-	{
-		vec3 N = planes[i].xyz;
-		float d = planes[i].w;
-		float denom = dot(V, N);
-		if (denom <= 0)
-			continue;
-		float t = -(dot(P0, N) + d) / denom;
-		vec3 P = P0 + t * V;
-		float q = boxSize + 0.01;
-		if (P.x > -q && P.x < q && P.y > -q && P.y < q && P.z > -q && P.z < q)
-		{
-			return colors[i];
-		}
-	}
-	return vec3(0.0, 0.0, 0.0);
-}
-
-vec3 clampedReflect(vec3 I, vec3 N) {
-	return I - 2.0 * min(dot(N, I), 0.0) * N;
 }
 
 void main()
@@ -152,14 +112,15 @@ void main()
 	specular += point_specular(N, L, V, u_material_factors.w) * u_point_light.color.rgb * u_point_light.color.a;
 	
 	vec3 diffuse_color = texture(diffuse_texture, in_uv).rgb * in_color.rgb;
+	vec3 specular_color = texture(specular_texture, in_uv).rgb;
 
-	float kS = u_material_factors.z * dot(texture(specular_texture, in_uv).rgb, vec3(1.0)) / 3.0;
+	float kS = u_material_factors.z * 2.0;
 	float kD = u_material_factors.y;
 
 	vec3 I = vec3(0.0);
 	I += u_material_factors.x * ambient * diffuse_color;
 	I += kD * diffuse * diffuse_color;
-	I += kS * specular;
-	I += kS * getCornellBoxReflectionColor(P, clampedReflect(normalize(-V), N)) * fresnel_schlick(N, V, 1.5);
+	I += kS * specular * specular_color;
+	I += kS * texture(evironment_texture, normalize(reflect(-V, N))).rgb * specular_color;
 	out_color.rgb = I;
 }

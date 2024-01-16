@@ -3,6 +3,7 @@
 #include "Descriptors.h"
 #include "PathUtils.h"
 #include <glm/glm.hpp>
+#include <array>
 
 // Why is max defined as a macro?
 #undef max
@@ -28,9 +29,8 @@ void Texture::destroy(VkDevice device)
 }
 #pragma endregion
 
-VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, std::vector<VklImageInfo> level_infos, std::vector<VkBuffer> level_host_bufs)
+void loadDataToImageLayer(VkCommandBuffer vk_cmd_buf, std::vector<VklImageInfo> level_infos, std::vector<VkBuffer> level_host_bufs, VkImage vk_image, uint32_t layer = 0)
 {
-	VkImage vk_img = vklCreateDeviceLocalImageWithBackingMemory(level_infos[0].extent.width, level_infos[0].extent.height, level_infos[0].imageFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 	uint32_t levelCount = level_infos.size();
 
 	VkImageMemoryBarrier2 vk_img_barrier_first = {
@@ -43,12 +43,12 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, std::vector<VklImageInfo>
 		.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = vk_img,
+		.image = vk_image,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.baseMipLevel = 0,
 			.levelCount = levelCount,
-			.baseArrayLayer = 0,
+			.baseArrayLayer = layer,
 			.layerCount = 1,
 		},
 	};
@@ -66,12 +66,12 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, std::vector<VklImageInfo>
 			.imageSubresource = {
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.mipLevel = i,
-				.baseArrayLayer = 0,
+				.baseArrayLayer = layer,
 				.layerCount = 1,
 			},
 			.imageExtent = {.width = level_infos[i].extent.width, .height = level_infos[i].extent.height, .depth = 1},
 		};
-		vkCmdCopyBufferToImage(vk_cmd_buf, level_host_bufs[i], vk_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &vk_img_copy_region);
+		vkCmdCopyBufferToImage(vk_cmd_buf, level_host_bufs[i], vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &vk_img_copy_region);
 	}
 
 	VkImageMemoryBarrier2 vk_img_barrier_second = {
@@ -84,12 +84,12 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, std::vector<VklImageInfo>
 		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-		.image = vk_img,
+		.image = vk_image,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.baseMipLevel = 0,
 			.levelCount = levelCount,
-			.baseArrayLayer = 0,
+			.baseArrayLayer = layer,
 			.layerCount = 1,
 		},
 	};
@@ -100,37 +100,72 @@ VkImage loadImageToTexture(VkCommandBuffer vk_cmd_buf, std::vector<VklImageInfo>
 		.pImageMemoryBarriers = &vk_img_barrier_second,
 	};
 	vkCmdPipelineBarrier2KHR(vk_cmd_buf, &vk_img_dep_info_second);
-
-	return vk_img;
 }
 
-std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, std::vector<std::string> names)
+void createAndStartCmdBuffer(VkDevice vk_device, uint32_t queue_family, VkCommandPool *vk_cmd_pool, VkCommandBuffer *vk_cmd_buffer)
 {
-	VkCommandPool vk_img_cmd_pool = VK_NULL_HANDLE;
-	VkCommandPoolCreateInfo vk_img_cmd_pool_create_info = {
+	VkCommandPoolCreateInfo vk_cmd_pool_create_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
 		.queueFamilyIndex = queue_family,
 	};
-	VkResult error = vkCreateCommandPool(vk_device, &vk_img_cmd_pool_create_info, nullptr, &vk_img_cmd_pool);
+	VkResult error = vkCreateCommandPool(vk_device, &vk_cmd_pool_create_info, nullptr, vk_cmd_pool);
 	VKL_CHECK_VULKAN_ERROR(error);
 
-	VkCommandBuffer vk_img_cmd_buf = VK_NULL_HANDLE;
-	VkCommandBufferAllocateInfo vk_img_cmd_buf_alloc_info = {
+	VkCommandBufferAllocateInfo vk_cmd_buf_alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = vk_img_cmd_pool,
+		.commandPool = *vk_cmd_pool,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 		.commandBufferCount = 1,
 	};
-	error = vkAllocateCommandBuffers(vk_device, &vk_img_cmd_buf_alloc_info, &vk_img_cmd_buf);
+	error = vkAllocateCommandBuffers(vk_device, &vk_cmd_buf_alloc_info, vk_cmd_buffer);
 	VKL_CHECK_VULKAN_ERROR(error);
 
-	VkCommandBufferBeginInfo vk_img_cmd_buf_begin_info = {
+	VkCommandBufferBeginInfo vk_cmd_buffer_begin_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = 0,
 	};
-	error = vkBeginCommandBuffer(vk_img_cmd_buf, &vk_img_cmd_buf_begin_info);
+	error = vkBeginCommandBuffer(*vk_cmd_buffer, &vk_cmd_buffer_begin_info);
 	VKL_CHECK_VULKAN_ERROR(error);
+}
+
+void destroyAndWaitCmdBuffer(VkDevice vk_device, VkQueue vk_queue, VkCommandPool *vk_cmd_pool, VkCommandBuffer *vk_cmd_buffer)
+{
+	VkResult error = vkEndCommandBuffer(*vk_cmd_buffer);
+	VKL_CHECK_VULKAN_ERROR(error);
+
+	VkFence vk_fence = VK_NULL_HANDLE;
+	VkFenceCreateInfo vk_img_fence_create_info = {
+		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+		.flags = 0,
+	};
+	error = vkCreateFence(vk_device, &vk_img_fence_create_info, nullptr, &vk_fence);
+	VKL_CHECK_VULKAN_ERROR(error);
+
+	VkSubmitInfo vk_submit_info = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = vk_cmd_buffer,
+	};
+
+	error = vkQueueSubmit(vk_queue, 1, &vk_submit_info, vk_fence);
+	VKL_CHECK_VULKAN_ERROR(error);
+
+	error = vkWaitForFences(vk_device, 1, &vk_fence, VK_TRUE, UINT64_MAX);
+	VKL_CHECK_VULKAN_ERROR(error);
+
+	vkDestroyCommandPool(vk_device, *vk_cmd_pool, nullptr);
+	vkDestroyFence(vk_device, vk_fence, nullptr);
+
+	*vk_cmd_pool = VK_NULL_HANDLE;
+	*vk_cmd_buffer = VK_NULL_HANDLE;
+}
+
+std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, std::vector<std::string> names)
+{
+	VkCommandPool vk_cmd_pool = VK_NULL_HANDLE;
+	VkCommandBuffer vk_cmd_buffer = VK_NULL_HANDLE;
+	createAndStartCmdBuffer(vk_device, queue_family, &vk_cmd_pool, &vk_cmd_buffer);
 
 	std::vector<VkBuffer> host_buffers;
 	std::vector<std::shared_ptr<Texture>> result;
@@ -148,7 +183,8 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 			level_bufs[i] = vklLoadDdsImageLevelIntoHostCoherentBuffer(path.c_str(), i);
 			host_buffers.push_back(level_bufs[i]);
 		}
-		VkImage image = loadImageToTexture(vk_img_cmd_buf, level_infos, level_bufs);
+		VkImage image = vklCreateDeviceLocalImageWithBackingMemory(level_infos[0].extent.width, level_infos[0].extent.height, level_infos[0].imageFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+		loadDataToImageLayer(vk_cmd_buffer, level_infos, level_bufs, image);
 
 		VkImageView image_view = VK_NULL_HANDLE;
 		VkImageViewCreateInfo image_view_create_info = {
@@ -166,37 +202,76 @@ std::vector<std::shared_ptr<Texture>> createTextureImages(VkDevice vk_device, Vk
 				.layerCount = 1,
 			},
 		};
-		error = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &image_view);
+		VkResult error = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &image_view);
 		VKL_CHECK_VULKAN_ERROR(error);
 
 		result.push_back(std::make_shared<Texture>(image, img_info.imageFormat, img_info.extent, image_view));
 	}
 
-	error = vkEndCommandBuffer(vk_img_cmd_buf);
-	VKL_CHECK_VULKAN_ERROR(error);
+	destroyAndWaitCmdBuffer(vk_device, vk_queue, &vk_cmd_pool, &vk_cmd_buffer);
+	for (auto &&buf : host_buffers)
+	{
+		vklDestroyHostCoherentBufferAndItsBackingMemory(buf);
+	}
+	return result;
+}
 
-	VkFence vk_img_fence = VK_NULL_HANDLE;
-	VkFenceCreateInfo vk_img_fence_create_info = {
-		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+std::shared_ptr<Texture> createTextureCubeMap(VkDevice vk_device, VkQueue vk_queue, uint32_t queue_family, const std::array<std::string, 6> &names)
+{
+	VkCommandPool vk_cmd_pool = VK_NULL_HANDLE;
+	VkCommandBuffer vk_cmd_buffer = VK_NULL_HANDLE;
+	createAndStartCmdBuffer(vk_device, queue_family, &vk_cmd_pool, &vk_cmd_buffer);
+
+	std::vector<VkBuffer> host_buffers;
+	VkImage image = VK_NULL_HANDLE;
+	VklImageInfo img_info;
+	uint32_t mipLevels;
+
+	for (uint32_t layer = 0; layer < 6; layer++)
+	{
+		std::string name = names[layer];
+		std::string path = gcgFindTextureFile("assets/textures/" + name);
+
+		if (image == VK_NULL_HANDLE)
+		{
+			img_info = vklGetDdsImageInfo(path.c_str());
+			image = vklCreateDeviceLocalImageWithBackingMemory(img_info.extent.width, img_info.extent.height, img_info.imageFormat, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 6, VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+			mipLevels = static_cast<uint32_t>(1 + std::floor(std::log2(std::max(img_info.extent.width, img_info.extent.height))));
+		}
+
+		std::vector<VkBuffer> level_bufs(mipLevels);
+		std::vector<VklImageInfo> level_infos(mipLevels);
+		for (size_t i = 0; i < mipLevels; i++)
+		{
+			level_infos[i] = vklGetDdsImageLevelInfo(path.c_str(), i);
+			level_bufs[i] = vklLoadDdsImageLevelIntoHostCoherentBuffer(path.c_str(), i);
+			host_buffers.push_back(level_bufs[i]);
+		}
+		loadDataToImageLayer(vk_cmd_buffer, level_infos, level_bufs, image, layer);
+	}
+
+	VkImageView image_view = VK_NULL_HANDLE;
+	VkImageViewCreateInfo image_view_create_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.flags = 0,
+		.image = image,
+		.viewType = VK_IMAGE_VIEW_TYPE_CUBE,
+		.format = img_info.imageFormat,
+		.components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY},
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = mipLevels,
+			.baseArrayLayer = 0,
+			.layerCount = 6,
+		},
 	};
-	error = vkCreateFence(vk_device, &vk_img_fence_create_info, nullptr, &vk_img_fence);
+	VkResult error = vkCreateImageView(vk_device, &image_view_create_info, nullptr, &image_view);
 	VKL_CHECK_VULKAN_ERROR(error);
 
-	VkSubmitInfo vk_img_submit_info = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.commandBufferCount = 1,
-		.pCommandBuffers = &vk_img_cmd_buf,
-	};
+	std::shared_ptr<Texture> result = std::make_shared<Texture>(image, img_info.imageFormat, img_info.extent, image_view);
 
-	error = vkQueueSubmit(vk_queue, 1, &vk_img_submit_info, vk_img_fence);
-	VKL_CHECK_VULKAN_ERROR(error);
-
-	error = vkWaitForFences(vk_device, 1, &vk_img_fence, VK_TRUE, UINT64_MAX);
-	VKL_CHECK_VULKAN_ERROR(error);
-
-	vkDestroyCommandPool(vk_device, vk_img_cmd_pool, nullptr);
-	vkDestroyFence(vk_device, vk_img_fence, nullptr);
+	destroyAndWaitCmdBuffer(vk_device, vk_queue, &vk_cmd_pool, &vk_cmd_buffer);
 	for (auto &&buf : host_buffers)
 	{
 		vklDestroyHostCoherentBufferAndItsBackingMemory(buf);
