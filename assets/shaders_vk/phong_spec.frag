@@ -153,7 +153,7 @@ void main()
 	
 	vec3 diffuse_color = texture(diffuse_texture, in_uv).rgb * in_color.rgb;
 
-	float kS = u_material_factors.z * texture(specular_texture, in_uv).r;
+	float kS = u_material_factors.z * dot(texture(specular_texture, in_uv).rgb, vec3(1.0)) / 3.0;
 	float kD = u_material_factors.y;
 
 	vec3 I = vec3(0.0);
