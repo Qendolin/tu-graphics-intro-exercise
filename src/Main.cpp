@@ -52,7 +52,7 @@ struct PointLightUniformBlock
 
 std::vector<std::unique_ptr<MeshInstance>> createScene()
 {
-    // std::shared_ptr<Mesh> cornell_mesh(create_cornell_mesh(3, 3, 3));
+    std::shared_ptr<Mesh> cornell_mesh(create_cube_mesh(100, 100, 100, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> cube_mesh(create_cube_mesh(0.34, 0.34, 0.34, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> cylinder_mesh(create_cylinder_mesh(0.2, 1.5, 18, {1.0, 1.0, 1.0}));
     std::shared_ptr<Mesh> sphere_mesh(create_sphere_mesh(0.24, 16, 32, {1.0, 1.0, 1.0}));
@@ -64,13 +64,13 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     std::shared_ptr<Mesh> bezier_mesh(create_bezier_mesh(std::move(bezeier_curve), {0, 0, -1}, 0.2, 42, 18, {1.0, 1.0, 1.0}));
 
     std::vector<std::unique_ptr<MeshInstance>> instances;
-    // MeshInstance *cornell_instance = new MeshInstance(cornell_mesh, PipelineMatrixManager::Shader::Box);
-    // instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
-    // cornell_instance->set_uniforms({
-    //     .color = {1.0, 1.0, 1.0, 1.0},
-    //     .model_matrix = glm::mat4(1.0),
-    //     .material_factors = {0.1, 0.9, 0.3, 10.0},
-    // });
+    MeshInstance *cornell_instance = new MeshInstance(cornell_mesh, PipelineMatrixManager::Shader::Box);
+    instances.push_back(std::unique_ptr<MeshInstance>(cornell_instance));
+    cornell_instance->set_uniforms({
+        .color = {1.0, 1.0, 1.0, 1.0},
+        .model_matrix = glm::mat4(1.0),
+        .material_factors = {1.0, 1.0, 1.0, 1.0},
+    });
 
     MeshInstance *cube_instance_1 = new MeshInstance(cube_mesh, PipelineMatrixManager::Shader::PhongSpec);
     instances.push_back(std::unique_ptr<MeshInstance>(cube_instance_1));
