@@ -77,7 +77,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     cube_instance_1->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::rotate(glm::translate(glm::mat4(1.0), {-0.5, -0.8, 0.0}), glm::radians(45.0f), {0, 1, 0}),
-        .material_factors = {0.1, 0.7, 0.3, 20.0},
+        .material_factors = {1.0, 0.7, 0.3, 20.0},
     });
     cube_instance_1->set_diffuse_index(0);
     cube_instance_1->set_specular_index(3);
@@ -87,7 +87,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     cylinder_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {-0.5, 0.3, 0.0}),
-        .material_factors = {0.1, 0.7, 0.3, 20.0},
+        .material_factors = {1.0, 0.7, 0.3, 20.0},
     });
     cylinder_instance->set_diffuse_index(0);
     cylinder_instance->set_specular_index(3);
@@ -97,7 +97,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     bezier_instance->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, 0, 0}),
-        .material_factors = {0.1, 0.7, 0.3, 8.0},
+        .material_factors = {1.0, 0.7, 0.3, 8.0},
     });
     bezier_instance->set_diffuse_index(1);
     bezier_instance->set_specular_index(2);
@@ -107,7 +107,7 @@ std::vector<std::unique_ptr<MeshInstance>> createScene()
     sphere_instance_2->set_uniforms({
         .color = {1.0, 1.0, 1.0, 1.0},
         .model_matrix = glm::translate(glm::mat4(1.0), {0.5, -0.8, 0}),
-        .material_factors = {0.1, 0.7, 0.3, 8.0},
+        .material_factors = {1.0, 0.5, 0.5, 20.0},
     });
     sphere_instance_2->set_diffuse_index(1);
     sphere_instance_2->set_specular_index(2);
@@ -231,16 +231,16 @@ int main(int argc, char **argv)
     vklCopyDataIntoHostCoherentBuffer(shader_constants_buffer, &shader_constants, sizeof(shader_constants));
 
     DirectionalLightUniformBlock directional_light = {
-        .direction = {0, -1, -1, 0},
-        .color = {0.8, 0.8, 0.8, 1.0},
+        .direction = {1, -1.5, -0.4, 0},
+        .color = {1.0, 1.0, 1.0, 2.0},
     };
     VkBuffer directional_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(directional_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(directional_light_buffer, &directional_light, sizeof(directional_light));
 
     PointLightUniformBlock point_light = {
-        .position = {0, 0, 0, 0},
-        .color = {1.0, 1.0, 1.0, 1.0},
-        .attenuation = {1.0, 0.4, 0.1, 0}};
+        .position = {0.5, -2, 0, 0},
+        .color = {3.0, 0.1, 0.1, 1.0},
+        .attenuation = {0.0, 0.0, 1.0, 0}};
     VkBuffer point_light_buffer = vklCreateHostCoherentBufferWithBackingMemory(sizeof(point_light), VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     vklCopyDataIntoHostCoherentBuffer(point_light_buffer, &point_light, sizeof(point_light));
 

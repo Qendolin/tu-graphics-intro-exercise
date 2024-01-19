@@ -76,6 +76,23 @@ float fresnel_schlick(vec3 N, vec3 V, float ior)
 	return R0 + (1.0 - R0) * pow(max(0.0, 1.0 - cosTheta), 5.0);
 }
 
+// AgX color transform from https://www.shadertoy.com/view/dlcfRX
+vec3 AgX(vec3 color) {
+	// Input transform
+	color = mat3(.842, .0423, .0424, .0784, .878, .0784, .0792, .0792, .879) * color;
+	// Log2 space encoding
+	color = clamp((log2(color) + 12.47393) / 16.5, vec3(0), vec3(1));
+	// Apply sigmoid function approximation
+	color = .5 + .5 * sin(((-3.11 * color + 6.42) * color - .378) * color - 1.44);
+	// AgX look (optional)
+    // Punchy
+  	color = mix(vec3(dot(color, vec3(.216,.7152,.0722))), pow(color,vec3(1.35)), 1.4);
+
+	// Eotf
+    color = mat3(1.2, -.053, -.053, -.1, 1.15, -.1, -.1, -.1, 1.15) * color;
+	return color;
+}
+
 void main()
 {
 	// normalizing the vertex normal is important and actually makes a difference
@@ -99,7 +116,7 @@ void main()
 	vec3 P = in_position;
 	vec3 V = u_camera_position.xyz - P;
 
-	vec3 ambient = vec3(1.0, 1.0, 1.0);
+	vec3 ambient = vec3(1.0, 1.0, 1.0) * 0.1;
 	vec3 diffuse = vec3(0.0);
 	vec3 specular = vec3(0.0);
 
@@ -113,6 +130,8 @@ void main()
 	
 	vec3 diffuse_color = texture(diffuse_texture, in_uv).rgb * in_color.rgb;
 	vec3 specular_color = texture(specular_texture, in_uv).rgb;
+	vec3 environment_color = texture(evironment_texture, normalize(reflect(-V, N))).rgb;
+	environment_color = pow(environment_color.rgb, vec3(3.0)) + environment_color.rgb;
 
 	float kS = u_material_factors.z * 2.0;
 	float kD = u_material_factors.y;
@@ -121,6 +140,8 @@ void main()
 	I += u_material_factors.x * ambient * diffuse_color;
 	I += kD * diffuse * diffuse_color;
 	I += kS * specular * specular_color;
-	I += kS * texture(evironment_texture, normalize(reflect(-V, N))).rgb * specular_color;
+	I += kS * environment_color * specular_color;
 	out_color.rgb = I;
+
+	out_color.rgb = AgX(out_color.rgb);
 }
