@@ -1,3 +1,7 @@
+# Info
+
+This repo contains the exercises for the introduction to computer graphics course at TU Wien.
+
 # Prerequesites
 
 ## Visual Studio Code (VS Code)
