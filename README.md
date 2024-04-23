@@ -1,6 +1,15 @@
 # Info
 
 This repo contains the exercises for the introduction to computer graphics course at TU Wien.
+For me it was also an introduction to using Vulkan.
+
+## Screenshots
+
+| Task    | Screenshot                                                        | Description         |
+| ------- | ----------------------------------------------------------------- | ------------------- |
+| Task 6  | <img src="docs/task6-screenshot.png" height="350" alt="Task 6">   | Specular Mapping    |
+| Bonus 6 | <img src="docs/bonus6-screenshot.png" height="350" alt="Bonus 6"> | Environment Mapping |
+| Bonus 5 | <img src="docs/bonus5-screenshot.png" height="350" alt="Bonus 5"> | PBR Shading         |
 
 # Prerequesites
 
